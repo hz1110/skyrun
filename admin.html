@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#100f24">
 <title>hz Admin</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Nunito:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -13,11 +14,13 @@
     --cloud-white:#f5f3ff; --muted-teal:#5ec9c0; --soft-rose:#e98074;
     --line: rgba(245,243,255,0.14);
   }
-  *{ box-sizing:border-box; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html{ background: var(--sky-deep); }
   body{
     margin:0; min-height:100vh; color:var(--cloud-white); font-family:'Nunito', sans-serif;
     background: radial-gradient(ellipse at 50% -10%, var(--sky-mid), var(--sky-dusk) 55%, var(--sky-deep) 100%);
   }
+  ::selection{ background: var(--candle-gold); color: var(--sky-deep); }
   h1,h2{ font-family:'Cormorant Garamond', serif; margin:0; }
   .wrap{ max-width: 760px; margin:0 auto; padding: 48px 24px 100px; }
   .mono{ font-family:'JetBrains Mono', monospace; }
