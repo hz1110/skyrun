@@ -48,6 +48,10 @@
   .msg.err{ background: rgba(233,128,116,0.15); color: var(--soft-rose); }
   .hint{ font-size:12.5px; color: rgba(245,243,255,0.45); margin-top:-8px; margin-bottom:16px; }
   #hidden{ display:none; }
+  .applicant-row{ border-bottom:1px dashed var(--line); padding:10px 0; font-size:13px; }
+  .applicant-row:last-child{ border-bottom:none; }
+  .applicant-row .d{ color: var(--candle-gold); font-weight:700; }
+  .applicant-row .meta{ color: rgba(245,243,255,0.55); font-size:12px; margin-top:3px; }
 </style>
 </head>
 <body>
@@ -76,10 +80,6 @@
       <label>Run date (used as the run's ID and its KST anchor date)</label>
       <input id="runDate" type="text" placeholder="2026-07-13">
 
-      <label>Current Delay (minutes) — shown at the top of the Live section</label>
-      <div class="hint">Positive = delayed (shows red), negative = ahead of schedule (shows green), 0 = on schedule.</div>
-      <input id="delayInput" type="number" step="1" value="0">
-
       <label>Timetable (JSON array — planned schedule, shown in Live section)</label>
       <div class="hint">Fields: time ("HH:MM" in KST), label, afk (true/false)</div>
       <textarea id="timetableInput">[
@@ -87,10 +87,10 @@
   { "time": "15:55", "label": "Fire Trial", "afk": false }
 ]</textarea>
 
-      <label>Report (JSON array — actual timing, shown once the run is archived)</label>
-      <div class="hint">Fields: time, label, delay ("plus" / "minus" / "none"), delayLabel (e.g. "+1 min", "-2 mins", "No Delay")</div>
+      <label>Report (JSON array — actual timing; also drives the live status badge and the "Live" half of the candle while the run is active, and is shown in full once archived)</label>
+      <div class="hint">Fields: time, label, delay ("plus" / "minus" / "none"), minutes (number, e.g. 2 — how many minutes off), delayLabel (shown in the archived report, e.g. "+1 min", "-2 mins", "No Delay"). The last entry in the array is treated as the current status — its delay + minutes auto-build the live "N min(s) ahead/delayed" text, so you don't have to hand-type that sentence.</div>
       <textarea id="reportInput">[
-  { "time": "15:53", "label": "Fire Trial", "delay": "minus", "delayLabel": "-2 mins" }
+  { "time": "15:53", "label": "Fire Trial", "delay": "minus", "minutes": 2, "delayLabel": "-2 mins" }
 ]</textarea>
 
       <button class="btn-primary" id="saveBtn">Save Run</button>
@@ -112,6 +112,24 @@
 ]</textarea>
       <button class="btn-primary" id="saveAnnouncementsBtn">Save Announcements</button>
     </div>
+
+    <div class="card">
+      <label>Accepting Applications</label>
+      <select id="applyEnabledInput">
+        <option value="false">Off</option>
+        <option value="true">On</option>
+      </select>
+      <label>Max Slots</label>
+      <input id="applyMaxInput" type="number" min="0" step="1" value="0">
+      <div class="hint" id="applyCountHint">Current applicants: 0 / 0</div>
+      <button class="btn-primary" id="saveApplyBtn">Save Application Settings</button>
+      <button class="btn-danger" id="resetApplyBtn">Reset Applications (clears all applicants)</button>
+    </div>
+
+    <div class="card">
+      <div class="hint" style="margin-top:0;">Applicants</div>
+      <div id="applicantList">Loading...</div>
+    </div>
   </div>
 </div>
 
@@ -121,7 +139,7 @@
     getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
-    getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, orderBy, query
+    getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, orderBy, query
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // ====== PASTE THE SAME FIREBASE CONFIG AS index.html ======
@@ -162,6 +180,8 @@
       loadRunList();
       loadCurrentLive();
       loadGlobalAnnouncements();
+      loadApplyConfig();
+      subscribeApplicants();
     } else {
       loginBox.style.display = 'block';
       hidden.style.display = 'none';
@@ -171,10 +191,13 @@
   // ---------- Run list dropdown ----------
   const runSelect = document.getElementById('runSelect');
   const runDateInput = document.getElementById('runDate');
-  const delayInput = document.getElementById('delayInput');
   const timetableInput = document.getElementById('timetableInput');
   const reportInput = document.getElementById('reportInput');
   const globalAnnouncementsInput = document.getElementById('globalAnnouncementsInput');
+  const applyEnabledInput = document.getElementById('applyEnabledInput');
+  const applyMaxInput = document.getElementById('applyMaxInput');
+  const applyCountHint = document.getElementById('applyCountHint');
+  const applicantListEl = document.getElementById('applicantList');
   const saveMsg = document.getElementById('saveMsg');
   const errMsg = document.getElementById('errMsg');
   const currentLiveDisplay = document.getElementById('currentLiveDisplay');
@@ -203,11 +226,56 @@
     globalAnnouncementsInput.value = JSON.stringify(snap.exists() ? (snap.data().items || []) : [], null, 2);
   }
 
+  async function loadApplyConfig(){
+    const snap = await getDoc(doc(db, 'meta', 'applications'));
+    const data = snap.exists() ? snap.data() : { enabled: false, maxSlots: 0, count: 0 };
+    applyEnabledInput.value = String(!!data.enabled);
+    applyMaxInput.value = data.maxSlots ?? 0;
+    applyCountHint.textContent = `Current applicants: ${data.count ?? 0} / ${data.maxSlots ?? 0}`;
+  }
+
+  function subscribeApplicants(){
+    onSnapshot(query(collection(db, 'applications'), orderBy('submittedAt', 'desc')), (snap) => {
+      if(snap.empty){
+        applicantListEl.innerHTML = '<div class="hint" style="margin:0;">No applicants yet.</div>';
+        return;
+      }
+      applicantListEl.innerHTML = snap.docs.map(d => {
+        const a = d.data();
+        const when = a.submittedAt && a.submittedAt.toDate ? a.submittedAt.toDate().toLocaleString() : 'just now';
+        return `
+          <div class="applicant-row">
+            <div class="d">${a.discord || '—'}</div>
+            <div>Sky nickname: ${a.nickname || '—'}</div>
+            <div>Friend code: ${a.alreadyFriends ? "Already friends" : (a.friendCode || '—')}</div>
+            <div class="meta">${when}</div>
+            <button class="btn-danger" data-id="${d.id}" style="margin-top:8px; padding:6px 12px; font-size:12.5px;">Delete</button>
+          </div>
+        `;
+      }).join('');
+    });
+  }
+
+  applicantListEl.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-id]');
+    if(!btn) return;
+    if(!confirm('Delete this applicant?')) return;
+    try{
+      await deleteDoc(doc(db, 'applications', btn.dataset.id));
+      const metaSnap = await getDoc(doc(db, 'meta', 'applications'));
+      const count = metaSnap.exists() ? (Number(metaSnap.data().count) || 0) : 0;
+      await setDoc(doc(db, 'meta', 'applications'), { count: Math.max(0, count - 1) }, { merge: true });
+      showOk('Applicant deleted.');
+      loadApplyConfig();
+    }catch(err){
+      showErr(err.message);
+    }
+  });
+
   runSelect.onchange = async () => {
     const id = runSelect.value;
     if(!id){
       runDateInput.value = '';
-      delayInput.value = '0';
       timetableInput.value = '[]';
       reportInput.value = '[]';
       return;
@@ -216,7 +284,6 @@
     if(snap.exists()){
       const data = snap.data();
       runDateInput.value = data.date || id;
-      delayInput.value = data.delayMinutes ?? 0;
       timetableInput.value = JSON.stringify(data.timetable || [], null, 2);
       reportInput.value = JSON.stringify(data.report || [], null, 2);
     }
@@ -234,11 +301,10 @@
     try{
       const runId = runDateInput.value.trim();
       if(!/^\d{4}-\d{2}-\d{2}$/.test(runId)) throw new Error('Run date must look like 2026-07-13.');
-      const delayMinutes = parseInt(delayInput.value, 10) || 0;
       const timetable = parseJsonField(timetableInput, 'Timetable');
       const report = parseJsonField(reportInput, 'Report');
 
-      await setDoc(doc(db, 'runs', runId), { date: runId, delayMinutes, timetable, report });
+      await setDoc(doc(db, 'runs', runId), { date: runId, timetable, report });
       showOk(`Saved run ${runId}.`);
       await loadRunList();
       runSelect.value = runId;
@@ -252,6 +318,31 @@
       const items = parseJsonField(globalAnnouncementsInput, 'Announcements');
       await setDoc(doc(db, 'meta', 'announcements'), { items });
       showOk('Saved announcements.');
+    }catch(e){
+      showErr(e.message);
+    }
+  };
+
+  document.getElementById('saveApplyBtn').onclick = async () => {
+    try{
+      const enabled = applyEnabledInput.value === 'true';
+      const maxSlots = parseInt(applyMaxInput.value, 10) || 0;
+      await setDoc(doc(db, 'meta', 'applications'), { enabled, maxSlots }, { merge: true });
+      showOk('Saved application settings.');
+      loadApplyConfig();
+    }catch(e){
+      showErr(e.message);
+    }
+  };
+
+  document.getElementById('resetApplyBtn').onclick = async () => {
+    try{
+      if(!confirm('Delete all applicants and reset the count to 0? This cannot be undone.')) return;
+      const snap = await getDocs(collection(db, 'applications'));
+      await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+      await setDoc(doc(db, 'meta', 'applications'), { count: 0 }, { merge: true });
+      showOk('Applications reset.');
+      loadApplyConfig();
     }catch(e){
       showErr(e.message);
     }
@@ -288,7 +379,6 @@
       showOk(`Deleted run ${runId}.`);
       runSelect.value = '';
       runDateInput.value = '';
-      delayInput.value = '0';
       timetableInput.value = '[]';
       reportInput.value = '[]';
       await loadRunList();

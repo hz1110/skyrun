@@ -84,6 +84,7 @@
 
   section{ padding: 56px 0; border-top: 1px solid var(--line); }
   .section-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom: 32px; flex-wrap:wrap; }
+  #apply .section-head{ margin-bottom: 12px; }
   .section-head .num{ font-family:'JetBrains Mono'; font-size:13px; color: var(--muted-teal); }
   .section-head h2{ font-size: 30px; color: var(--cloud-white); }
   .section-sub{ color: rgba(245,243,255,0.55); font-size:14px; margin-top:6px; }
@@ -92,18 +93,33 @@
   .candle{
     position:relative; width:64px; border-radius: 10px 10px 4px 4px;
     background: linear-gradient(180deg, rgba(245,243,255,0.08), rgba(245,243,255,0.03));
-    border: 1px solid var(--line); overflow:hidden; min-height: 260px;
+    border: 1px solid var(--line); overflow:hidden; min-height: 80px;
   }
   .candle-fill{
-    position:absolute; bottom:0; left:0; right:0;
+    position:absolute; bottom:0; width:50%; color: var(--candle-gold);
     background: linear-gradient(180deg, var(--candle-gold), var(--candle-ember));
-    transition: height 1.2s ease; border-radius: 4px 4px 0 0;
+    transition: height 1.2s ease, background 0.4s ease;
+  }
+  .candle-fill.planned{ left:0; border-radius: 4px 0 0 0; }
+  .candle-fill.live{ right:0; border-radius: 0 4px 0 0; }
+  .candle-fill.live.late{ background: linear-gradient(180deg, var(--soft-rose), #c9584c); color: var(--soft-rose); }
+  .candle-fill.live.early{ background: linear-gradient(180deg, var(--early-green), #6ba76f); color: var(--early-green); }
+  .candle-fill::before{
+    content:''; position:absolute; top:-1px; left:6%; right:6%; height:5px;
+    background: currentColor; border-radius:3px; filter: blur(3px);
+    animation: fill-glow 2.4s ease-in-out infinite;
+  }
+  @keyframes fill-glow{
+    0%,100%{ opacity:0.55; transform: scaleX(0.85); }
+    50%{ opacity:1; transform: scaleX(1); }
   }
   .flame{
     position:absolute; top:-22px; left:50%; transform:translateX(-50%);
     width:14px; height:22px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
     background: radial-gradient(circle at 50% 70%, var(--candle-gold), var(--candle-ember) 70%, transparent 100%);
-    filter: blur(0.3px); animation: flicker 2.4s ease-in-out infinite;
+    filter: blur(0.3px);
+    box-shadow: 0 0 10px 3px rgba(255,201,120,0.65), 0 0 22px 9px rgba(244,163,64,0.3);
+    animation: flicker 2.4s ease-in-out infinite;
   }
   @keyframes flicker{
     0%,100%{ transform:translateX(-50%) scaleY(1) rotate(0deg); opacity:1;}
@@ -157,6 +173,51 @@
   .recs a:hover{ color: var(--candle-ember); }
   .empty-note{ color: rgba(245,243,255,0.4); font-size:14px; }
 
+  .apply-slots{ color: var(--muted-teal); font-size:14px; margin-bottom:16px; }
+  .apply-form{ display:flex; flex-direction:column; gap:16px; max-width:420px; }
+  .apply-form label{ display:block; font-size:13px; color: rgba(245,243,255,0.6); margin-bottom:6px; }
+  .apply-form input{
+    width:100%; padding:11px 13px; border-radius:8px; border:1px solid var(--line);
+    background: rgba(245,243,255,0.05); color:var(--cloud-white); font-family:'Nunito'; font-size:14px;
+  }
+  .apply-form input:focus{ outline:none; border-color: var(--candle-gold); }
+  .apply-form input[disabled]{ opacity:0.45; }
+  .apply-checkbox{
+    display:flex; align-items:center; gap:8px; margin-top:8px;
+    font-size:13px; color: rgba(245,243,255,0.6); cursor:pointer;
+  }
+  .apply-checkbox input[type="checkbox"]{ width:auto; margin:0; accent-color: var(--candle-gold); }
+  .apply-btn{
+    cursor:pointer; border:none; border-radius:8px; padding:12px 22px; font-weight:700;
+    font-family:'Nunito'; font-size:14px; background: var(--candle-gold); color:#1b1b3a; width:fit-content;
+  }
+  .apply-btn:disabled{ opacity:0.5; cursor:not-allowed; }
+  .apply-msg{ font-size:13.5px; }
+  .apply-msg.ok{ color: var(--early-green); }
+  .apply-msg.err{ color: var(--soft-rose); }
+  .apply-closed{ color: rgba(245,243,255,0.6); font-size:14.5px; }
+
+  .modal-overlay{
+    position:fixed; inset:0; background: rgba(16,15,36,0.75); backdrop-filter: blur(3px);
+    z-index:50; display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .modal-box{
+    background: var(--sky-mid); border:1px solid var(--line); border-radius:16px;
+    padding:26px; max-width:480px; width:100%; max-height:82vh; overflow-y:auto;
+  }
+  .modal-box h3{ font-size:20px; margin-bottom:18px; }
+  .rules-section{ margin-bottom:12px; }
+  .rules-section:last-of-type{ margin-bottom:0; }
+  .rules-section h4{ font-family:'Nunito'; font-size:14px; color: var(--candle-gold); margin-bottom:10px; font-weight:800; }
+  .rules-section ul{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; }
+  .rules-section li{ font-size:13.5px; color: rgba(245,243,255,0.8); line-height:1.35; }
+  .modal-actions{ display:flex; gap:10px; margin-top:22px; }
+  .modal-actions .apply-btn{ flex:1; text-align:center; }
+  .modal-actions .btn-cancel{
+    flex:1; cursor:pointer; border:none; border-radius:8px; padding:12px 22px; font-weight:700;
+    font-family:'Nunito'; font-size:14px; background: rgba(245,243,255,0.08); color:var(--cloud-white); border:1px solid var(--line);
+  }
+
   footer{ text-align:center; padding: 40px 0 10px; color: rgba(245,243,255,0.35); font-size:12.5px; }
 
   @media (max-width:560px){
@@ -165,7 +226,7 @@
     .step{ grid-template-columns: 60px 16px 1fr; }
   }
   @media (prefers-reduced-motion: reduce){
-    .flame, .status-pill .dot, .star{ animation:none !important; }
+    .flame, .status-pill .dot, .star, .candle-fill::before{ animation:none !important; }
   }
 </style>
 </head>
@@ -180,18 +241,30 @@
     <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">Loading...</span></div>
   </div>
 
+  <!-- APPLY -->
+  <section id="apply" style="display:none;">
+    <div class="section-head">
+      <div>
+        <h2>Apply to Join</h2>
+        <div class="section-sub" id="applySub"></div>
+      </div>
+    </div>
+    <div id="applyBody"></div>
+  </section>
+
   <!-- LIVE PROGRESS -->
   <section id="progress">
     <div class="section-head">
       <div>
-        <h2>In Progress</h2>
+        <h2>Progress</h2>
         <div class="section-sub" id="liveSub">Waiting for the current run...</div>
       </div>
     </div>
     <div class="progress-shell">
       <div class="candle">
         <div class="flame" id="flame"></div>
-        <div class="candle-fill" id="candleFill" style="height:0%"></div>
+        <div class="candle-fill planned" id="candleFill" style="height:0%"></div>
+        <div class="candle-fill live" id="realtimeCandleFill" style="height:0%"></div>
       </div>
       <div class="timeline" id="timeline"></div>
     </div>
@@ -211,10 +284,41 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="rulesModal" style="display:none;">
+  <div class="modal-box">
+    <h3>Before you apply...</h3>
+
+    <div class="rules-section">
+      <h4>🤝 Rules</h4>
+      <ul>
+        <li>⚠️ Sky Kids whose Discord accounts are created before <span id="discordCutoffDate">—</span> are allowed.</li>
+        <li>⚠️ Set Aviary as home.</li>
+        <li>📌 Auto-Hand. Refrain from releasing hands unless we are doing daily quest, meditating, or interacting with some objects.</li>
+        <li>📌 Please try to teleport back if we get split. If you can't join me even with a minute, please directly reach me out with Discord Direct Message.</li>
+      </ul>
+    </div>
+
+    <div class="rules-section">
+      <h4>🔍 Note!</h4>
+      <ul>
+        <li>🤠 Once you're done interacting with any interact-ables, I'd appreciate it if you honk after interact!!!</li>
+        <li>⛺ I'll use tent glitched Shared Memory, but sometimes I can't see those Shared Memories. You can release our hands and lead me up to teleport if you can see Shared Memories first.</li>
+        <li>👥 No extra sky kids from your constellation allowed. I don't mind if your friend joins us suddenly, but I won't wait around for your friends to move areas. But, my alternative account may be joining us as well.(?!)</li>
+        <li>🔇 Preferred Quiet Run. Because my English is pretty bad, so I want to avoid chatting for more focusing on collecting our wax! You can chat if you have any inquiries, of course.</li>
+      </ul>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" id="rulesCancelBtn">Cancel</button>
+      <button type="button" class="apply-btn" id="rulesAgreeBtn">Submit</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, doc, onSnapshot, collection, query, orderBy
+    getFirestore, doc, onSnapshot, collection, query, orderBy, runTransaction, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // ====== 1) PASTE YOUR FIREBASE CONFIG HERE (same object for index.html and admin.html) ======
@@ -274,22 +378,31 @@
     });
   }
 
-  function delayStatusText(min){
-    min = Number(min) || 0;
-    if(min === 0) return 'On schedule';
-    const unit = Math.abs(min) === 1 ? 'min' : 'mins';
-    if(min > 0) return `+${min} ${unit} delayed`;
-    return `${Math.abs(min)} ${unit} ahead`;
-  }
-  function delayStatusClass(min){
-    min = Number(min) || 0;
-    if(min > 0) return 'late';
-    if(min < 0) return 'early';
+  function delayClassFromReport(delay){
+    if(delay === 'plus') return 'late';
+    if(delay === 'minus') return 'early';
     return '';
+  }
+  // Builds "On schedule" / "N min(s) ahead" / "N min(s) delayed" from an entry's delay + minutes,
+  // so admins don't have to hand-type the status sentence for every report row.
+  function reportStatusText(entry){
+    if(!entry || entry.delay === 'none') return 'On schedule';
+    let min = Number(entry.minutes);
+    if(!min && entry.delayLabel){
+      const match = String(entry.delayLabel).match(/(\d+)/);
+      if(match) min = Number(match[1]);
+    }
+    min = Math.abs(min) || 0;
+    if(min === 0) return 'On schedule';
+    const unit = min === 1 ? 'min' : 'mins';
+    if(entry.delay === 'plus') return `${min} ${unit} delayed`;
+    if(entry.delay === 'minus') return `${min} ${unit} ahead`;
+    return 'On schedule';
   }
 
   // ---------- Render the live run ----------
   const timelineEl = document.getElementById('timeline');
+  const realtimeCandleFillEl = document.getElementById('realtimeCandleFill');
   const announcementsEl = document.getElementById('announcements');
   const liveSubEl = document.getElementById('liveSub');
   const statusPillEl = document.getElementById('statusPill');
@@ -305,6 +418,8 @@
       statusTextEl.textContent = 'No Run is currently active.';
       statusPillEl.className = 'status-pill none';
       document.getElementById('candleFill').style.height = '0%';
+      realtimeCandleFillEl.style.height = '0%';
+      realtimeCandleFillEl.className = 'candle-fill live';
       return;
     }
     const { date, timetable = [], report = [] } = liveRunData;
@@ -312,12 +427,14 @@
 
     const now = new Date();
     let currentIdx = -1;
-    timetable.forEach((step, i) => {
-      const stepDate = kstToDate(date, step.time);
-      const nextDate = i < timetable.length-1 ? kstToDate(date, timetable[i+1].time) : new Date(stepDate.getTime()+15*60000);
-      if(now >= stepDate && now < nextDate) currentIdx = i;
-    });
-    if(currentIdx === -1) currentIdx = timetable.length ? timetable.length - 1 : -1;
+    if(timetable.length && now >= kstToDate(date, timetable[0].time)){
+      currentIdx = timetable.length - 1; // fallback: past the last step
+      timetable.forEach((step, i) => {
+        const stepDate = kstToDate(date, step.time);
+        const nextDate = i < timetable.length-1 ? kstToDate(date, timetable[i+1].time) : new Date(stepDate.getTime()+15*60000);
+        if(now >= stepDate && now < nextDate) currentIdx = i;
+      });
+    }
 
     timelineEl.innerHTML = '';
     timetable.forEach((step, i) => {
@@ -336,8 +453,24 @@
 
     const pct = timetable.length ? Math.round(((currentIdx+1) / timetable.length) * 100) : 0;
     document.getElementById('candleFill').style.height = pct + '%';
-    statusTextEl.textContent = delayStatusText(liveRunData.delayMinutes);
-    statusPillEl.className = `status-pill ${delayStatusClass(liveRunData.delayMinutes)}`.trim();
+
+    // Real-time candle + status badge: both driven by the admin's Report field,
+    // colored by the most recently logged delay. Each report entry describes a
+    // step that's already been *done*, so the live fill sits one step ahead of
+    // the planned graph's step count (we're working toward the next one).
+    const reportPct = (timetable.length && report.length) ? Math.min(100, Math.round(((report.length + 1) / timetable.length) * 100)) : 0;
+    realtimeCandleFillEl.style.height = reportPct + '%';
+    const lastReport = report[report.length - 1];
+    const reportCls = delayClassFromReport(lastReport ? lastReport.delay : 'none');
+    realtimeCandleFillEl.className = `candle-fill live ${reportCls}`.trim();
+
+    if(currentIdx === -1){
+      statusTextEl.textContent = 'No Run is currently active.';
+      statusPillEl.className = 'status-pill none';
+    } else {
+      statusTextEl.textContent = reportStatusText(lastReport);
+      statusPillEl.className = `status-pill ${reportCls}`.trim();
+    }
   }
 
   // ---------- Global announcements (always shown, independent of any run) ----------
@@ -401,9 +534,137 @@
     }).join('');
   }
 
+  // ⚠️ Discord account cutoff shown in the rules popup: 3 months before the
+  // most recently created run's date, so it drifts forward automatically as
+  // new runs get added.
+  function updateDiscordCutoff(){
+    const cutoffEl = document.getElementById('discordCutoffDate');
+    if(!cutoffEl) return;
+    const latest = allRuns[0];
+    if(!latest || !latest.data || !latest.data.date){ cutoffEl.textContent = '—'; return; }
+    const [y, m, d] = latest.data.date.split('-').map(Number);
+    const cutoff = new Date(y, m - 1, d);
+    cutoff.setMonth(cutoff.getMonth() - 3);
+    cutoffEl.textContent = cutoff.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
   onSnapshot(query(collection(db, 'runs'), orderBy('date', 'desc')), (snap) => {
     allRuns = snap.docs.map(d => ({ id: d.id, data: d.data() }));
     renderArchive();
+    updateDiscordCutoff();
+  });
+
+  // ---------- Apply to join ----------
+  const applySectionEl = document.getElementById('apply');
+  const applySubEl = document.getElementById('applySub');
+  const applyBodyEl = document.getElementById('applyBody');
+  let applyConfig = null;
+
+  function renderApply(){
+    if(!applyConfig || !applyConfig.enabled){
+      applySectionEl.style.display = 'none';
+      return;
+    }
+    applySectionEl.style.display = '';
+    const maxSlots = Number(applyConfig.maxSlots) || 0;
+    const count = Number(applyConfig.count) || 0;
+    const remaining = maxSlots - count;
+
+    if(remaining <= 0){
+      applySubEl.textContent = '';
+      applyBodyEl.innerHTML = `<div class="apply-closed">Applications are closed.</div>`;
+      return;
+    }
+
+    applySubEl.textContent = '';
+    applyBodyEl.innerHTML = `
+      <div class="apply-slots">${remaining} slot${remaining === 1 ? '' : 's'} left!</div>
+      <form class="apply-form" id="applyForm">
+        <div>
+          <label for="discordInput">Discord Username</label>
+          <input type="text" id="discordInput" placeholder=".hz1110" required>
+        </div>
+        <div>
+          <label for="nicknameInput">Preferred Your Sky Nickname</label>
+          <input type="text" id="nicknameInput" placeholder="hz" required>
+        </div>
+        <div>
+          <label for="friendCodeInput">Sky Friend Code</label>
+          <input type="text" id="friendCodeInput" placeholder="0000-0000-0000" required>
+          <label class="apply-checkbox">
+            <input type="checkbox" id="alreadyFriendsInput">
+            We're already friends!
+          </label>
+        </div>
+        <button type="submit" class="apply-btn" id="applySubmitBtn">Submit</button>
+        <div class="apply-msg" id="applyMsg"></div>
+      </form>
+    `;
+    const friendCodeInput = document.getElementById('friendCodeInput');
+    document.getElementById('alreadyFriendsInput').addEventListener('change', (e) => {
+      friendCodeInput.required = !e.target.checked;
+      friendCodeInput.disabled = e.target.checked;
+      if(e.target.checked) friendCodeInput.value = '';
+    });
+    document.getElementById('applyForm').addEventListener('submit', onApplyFormSubmit);
+  }
+
+  let pendingApplication = null;
+  const rulesModalEl = document.getElementById('rulesModal');
+
+  function onApplyFormSubmit(e){
+    e.preventDefault();
+    const discord = document.getElementById('discordInput').value.trim();
+    const nickname = document.getElementById('nicknameInput').value.trim();
+    const friendCode = document.getElementById('friendCodeInput').value.trim();
+    const alreadyFriends = document.getElementById('alreadyFriendsInput').checked;
+    if(!discord || !nickname || (!friendCode && !alreadyFriends)) return;
+
+    pendingApplication = { discord, nickname, friendCode, alreadyFriends };
+    rulesModalEl.style.display = 'flex';
+  }
+
+  document.getElementById('rulesCancelBtn').onclick = () => {
+    rulesModalEl.style.display = 'none';
+    pendingApplication = null;
+  };
+
+  document.getElementById('rulesAgreeBtn').onclick = async () => {
+    if(!pendingApplication) return;
+    const { discord, nickname, friendCode, alreadyFriends } = pendingApplication;
+    rulesModalEl.style.display = 'none';
+    pendingApplication = null;
+
+    const submitBtn = document.getElementById('applySubmitBtn');
+    const msgEl = document.getElementById('applyMsg');
+    submitBtn.disabled = true;
+    msgEl.className = 'apply-msg';
+    msgEl.textContent = 'Submitting...';
+
+    try{
+      const metaRef = doc(db, 'meta', 'applications');
+      const appRef = doc(collection(db, 'applications'));
+      await runTransaction(db, async (tx) => {
+        const metaSnap = await tx.get(metaRef);
+        const data = metaSnap.exists() ? metaSnap.data() : { enabled: false, maxSlots: 0, count: 0 };
+        if(!data.enabled) throw new Error('Applications just closed.');
+        const count = Number(data.count) || 0;
+        const maxSlots = Number(data.maxSlots) || 0;
+        if(count >= maxSlots) throw new Error('Applications just filled up.');
+        tx.set(appRef, { discord, nickname, friendCode, alreadyFriends, submittedAt: serverTimestamp() });
+        tx.set(metaRef, { ...data, count: count + 1 }, { merge: true });
+      });
+      applyBodyEl.innerHTML = `<div class="apply-msg ok">✅ Application submitted! We'll reach out on Discord.</div>`;
+    }catch(err){
+      submitBtn.disabled = false;
+      msgEl.className = 'apply-msg err';
+      msgEl.textContent = err.message || 'Something went wrong. Please try again.';
+    }
+  };
+
+  onSnapshot(doc(db, 'meta', 'applications'), (snap) => {
+    applyConfig = snap.exists() ? snap.data() : null;
+    renderApply();
   });
 </script>
 
