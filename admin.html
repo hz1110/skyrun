@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hz Admin</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Nunito:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --sky-dusk:#1b1b3a; --sky-deep:#100f24; --sky-mid:#2c2a55;
+    --candle-gold:#ffc978; --candle-ember:#f4a340; --aurora-lavender:#b98bd9;
+    --cloud-white:#f5f3ff; --muted-teal:#5ec9c0; --soft-rose:#e98074;
+    --line: rgba(245,243,255,0.14);
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; min-height:100vh; color:var(--cloud-white); font-family:'Nunito', sans-serif;
+    background: radial-gradient(ellipse at 50% -10%, var(--sky-mid), var(--sky-dusk) 55%, var(--sky-deep) 100%);
+  }
+  h1,h2{ font-family:'Cormorant Garamond', serif; margin:0; }
+  .wrap{ max-width: 760px; margin:0 auto; padding: 48px 24px 100px; }
+  .mono{ font-family:'JetBrains Mono', monospace; }
+
+  #loginBox{ max-width:360px; margin: 80px auto; text-align:center; }
+  input, textarea, select{
+    width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line);
+    background: rgba(245,243,255,0.05); color:var(--cloud-white); font-family:'Nunito';
+    margin-top:6px; margin-bottom:16px; font-size:14px;
+  }
+  textarea{ font-family:'JetBrains Mono'; font-size:12.5px; min-height:140px; resize:vertical; }
+  label{ font-size:13px; color: rgba(245,243,255,0.6); display:block; }
+  button{
+    cursor:pointer; border:none; border-radius:8px; padding:10px 18px; font-weight:700;
+    font-family:'Nunito'; font-size:14px; margin-right:8px; margin-bottom:8px;
+  }
+  .btn-primary{ background: var(--candle-gold); color:#1b1b3a; }
+  .btn-secondary{ background: rgba(245,243,255,0.08); color:var(--cloud-white); border:1px solid var(--line); }
+  .btn-danger{ background: rgba(233,128,116,0.18); color: var(--soft-rose); border:1px solid rgba(233,128,116,0.4); }
+
+  .card{ border:1px solid var(--line); border-radius:14px; padding:24px; margin-bottom:24px; background: rgba(245,243,255,0.02); }
+  .topbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:28px; }
+  .msg{ font-size:13px; padding:10px 14px; border-radius:8px; margin-bottom:16px; }
+  .msg.ok{ background: rgba(139,201,143,0.15); color:#8bc98f; }
+  .msg.err{ background: rgba(233,128,116,0.15); color: var(--soft-rose); }
+  .hint{ font-size:12.5px; color: rgba(245,243,255,0.45); margin-top:-8px; margin-bottom:16px; }
+  #hidden{ display:none; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div id="loginBox">
+    <label>Email</label>
+    <input id="email" type="email" placeholder="you@example.com">
+    <label>Password</label>
+    <input id="password" type="password" placeholder="••••••••">
+    <button class="btn-primary" id="loginBtn" style="width:100%;">Log In</button>
+    <div class="msg err" id="loginMsg" style="display:none;"></div>
+  </div>
+
+  <div id="hidden">
+    <div class="topbar">
+      <button class="btn-secondary" id="logoutBtn">Log Out</button>
+    </div>
+
+    <div class="msg ok" id="saveMsg" style="display:none;"></div>
+    <div class="msg err" id="errMsg" style="display:none;"></div>
+
+    <div class="card">
+      <label>Load an existing run, or type a new date (YYYY-MM-DD) to create one</label>
+      <select id="runSelect"><option value="">— New run —</option></select>
+      <label>Run date (used as the run's ID and its KST anchor date)</label>
+      <input id="runDate" type="text" placeholder="2026-07-13">
+
+      <label>Current Delay (minutes) — shown at the top of the Live section</label>
+      <div class="hint">Positive = delayed (shows red), negative = ahead of schedule (shows green), 0 = on schedule.</div>
+      <input id="delayInput" type="number" step="1" value="0">
+
+      <label>Timetable (JSON array — planned schedule, shown in Live section)</label>
+      <div class="hint">Fields: time ("HH:MM" in KST), label, afk (true/false)</div>
+      <textarea id="timetableInput">[
+  { "time": "15:53", "label": "We all need to stay together!", "afk": true },
+  { "time": "15:55", "label": "Fire Trial", "afk": false }
+]</textarea>
+
+      <label>Report (JSON array — actual timing, shown once the run is archived)</label>
+      <div class="hint">Fields: time, label, delay ("plus" / "minus" / "none"), delayLabel (e.g. "+1 min", "-2 mins", "No Delay")</div>
+      <textarea id="reportInput">[
+  { "time": "15:53", "label": "Fire Trial", "delay": "minus", "delayLabel": "-2 mins" }
+]</textarea>
+
+      <button class="btn-primary" id="saveBtn">Save Run</button>
+      <button class="btn-secondary" id="setLiveBtn">Set as Live Run</button>
+      <button class="btn-secondary" id="endLiveBtn">End Run (Move to Archive)</button>
+      <button class="btn-danger" id="deleteBtn">Delete Run</button>
+    </div>
+
+    <div class="card">
+      <div class="hint" style="margin-top:0;">Currently live run:</div>
+      <div id="currentLiveDisplay" class="mono" style="font-size:14px;">—</div>
+    </div>
+
+    <div class="card">
+      <label>Announcements (JSON array of strings — always shown on the site, independent of any run; HTML like &lt;a&gt; is allowed)</label>
+      <div class="hint">Insert a live countdown with {{t:HH:MM}} (KST, anchored to today's date) — e.g. "Fire Trial starts {{t:15:55}}" renders as "in 12m" that auto-updates.</div>
+      <textarea id="globalAnnouncementsInput">[
+  "📌 Don't forget to claim your Daily Quest rewards!"
+]</textarea>
+      <button class="btn-primary" id="saveAnnouncementsBtn">Save Announcements</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import {
+    getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, orderBy, query
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // ====== PASTE THE SAME FIREBASE CONFIG AS index.html ======
+  const firebaseConfig = {
+    apiKey: "AIzaSyD4TFAfwXiWSLNGkcXqWLv7cfB85iczmg8",
+    authDomain: "sky-colt-for-candle-run.firebaseapp.com",
+    projectId: "sky-colt-for-candle-run",
+    storageBucket: "sky-colt-for-candle-run.firebasestorage.app",
+    messagingSenderId: "924531234237",
+    appId: "1:924531234237:web:fc6b1e4ea39be1eb58eed4"
+  };
+  // ============================================================
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const loginBox = document.getElementById('loginBox');
+  const hidden = document.getElementById('hidden');
+  const loginMsg = document.getElementById('loginMsg');
+
+  document.getElementById('loginBtn').onclick = async () => {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    try{
+      await signInWithEmailAndPassword(auth, email, password);
+    }catch(e){
+      loginMsg.style.display = 'block';
+      loginMsg.textContent = 'Login failed: ' + e.message;
+    }
+  };
+  document.getElementById('logoutBtn').onclick = () => signOut(auth);
+
+  onAuthStateChanged(auth, (user) => {
+    if(user){
+      loginBox.style.display = 'none';
+      hidden.style.display = 'block';
+      loadRunList();
+      loadCurrentLive();
+      loadGlobalAnnouncements();
+    } else {
+      loginBox.style.display = 'block';
+      hidden.style.display = 'none';
+    }
+  });
+
+  // ---------- Run list dropdown ----------
+  const runSelect = document.getElementById('runSelect');
+  const runDateInput = document.getElementById('runDate');
+  const delayInput = document.getElementById('delayInput');
+  const timetableInput = document.getElementById('timetableInput');
+  const reportInput = document.getElementById('reportInput');
+  const globalAnnouncementsInput = document.getElementById('globalAnnouncementsInput');
+  const saveMsg = document.getElementById('saveMsg');
+  const errMsg = document.getElementById('errMsg');
+  const currentLiveDisplay = document.getElementById('currentLiveDisplay');
+
+  function showOk(msg){ saveMsg.style.display='block'; saveMsg.textContent = msg; errMsg.style.display='none'; setTimeout(()=>saveMsg.style.display='none', 3500); }
+  function showErr(msg){ errMsg.style.display='block'; errMsg.textContent = msg; saveMsg.style.display='none'; }
+
+  async function loadRunList(){
+    const snap = await getDocs(query(collection(db, 'runs'), orderBy('date', 'desc')));
+    runSelect.innerHTML = '<option value="">— New run —</option>';
+    snap.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.id;
+      runSelect.appendChild(opt);
+    });
+  }
+
+  async function loadCurrentLive(){
+    const snap = await getDoc(doc(db, 'meta', 'current'));
+    currentLiveDisplay.textContent = snap.exists() && snap.data().activeRunId ? snap.data().activeRunId : 'None';
+  }
+
+  async function loadGlobalAnnouncements(){
+    const snap = await getDoc(doc(db, 'meta', 'announcements'));
+    globalAnnouncementsInput.value = JSON.stringify(snap.exists() ? (snap.data().items || []) : [], null, 2);
+  }
+
+  runSelect.onchange = async () => {
+    const id = runSelect.value;
+    if(!id){
+      runDateInput.value = '';
+      delayInput.value = '0';
+      timetableInput.value = '[]';
+      reportInput.value = '[]';
+      return;
+    }
+    const snap = await getDoc(doc(db, 'runs', id));
+    if(snap.exists()){
+      const data = snap.data();
+      runDateInput.value = data.date || id;
+      delayInput.value = data.delayMinutes ?? 0;
+      timetableInput.value = JSON.stringify(data.timetable || [], null, 2);
+      reportInput.value = JSON.stringify(data.report || [], null, 2);
+    }
+  };
+
+  function parseJsonField(el, name){
+    try{
+      return JSON.parse(el.value);
+    }catch(e){
+      throw new Error(`${name} isn't valid JSON: ${e.message}`);
+    }
+  }
+
+  document.getElementById('saveBtn').onclick = async () => {
+    try{
+      const runId = runDateInput.value.trim();
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(runId)) throw new Error('Run date must look like 2026-07-13.');
+      const delayMinutes = parseInt(delayInput.value, 10) || 0;
+      const timetable = parseJsonField(timetableInput, 'Timetable');
+      const report = parseJsonField(reportInput, 'Report');
+
+      await setDoc(doc(db, 'runs', runId), { date: runId, delayMinutes, timetable, report });
+      showOk(`Saved run ${runId}.`);
+      await loadRunList();
+      runSelect.value = runId;
+    }catch(e){
+      showErr(e.message);
+    }
+  };
+
+  document.getElementById('saveAnnouncementsBtn').onclick = async () => {
+    try{
+      const items = parseJsonField(globalAnnouncementsInput, 'Announcements');
+      await setDoc(doc(db, 'meta', 'announcements'), { items });
+      showOk('Saved announcements.');
+    }catch(e){
+      showErr(e.message);
+    }
+  };
+
+  document.getElementById('setLiveBtn').onclick = async () => {
+    try{
+      const runId = runDateInput.value.trim();
+      if(!runId) throw new Error('Save the run first, then set it live.');
+      await setDoc(doc(db, 'meta', 'current'), { activeRunId: runId });
+      showOk(`${runId} is now the live run.`);
+      loadCurrentLive();
+    }catch(e){
+      showErr(e.message);
+    }
+  };
+
+  document.getElementById('endLiveBtn').onclick = async () => {
+    try{
+      await setDoc(doc(db, 'meta', 'current'), { activeRunId: null });
+      showOk('Run ended and moved to the archive.');
+      loadCurrentLive();
+    }catch(e){
+      showErr(e.message);
+    }
+  };
+
+  document.getElementById('deleteBtn').onclick = async () => {
+    try{
+      const runId = runDateInput.value.trim();
+      if(!runId) throw new Error('No run selected to delete.');
+      if(!confirm(`Delete run ${runId}? This cannot be undone.`)) return;
+      await deleteDoc(doc(db, 'runs', runId));
+      showOk(`Deleted run ${runId}.`);
+      runSelect.value = '';
+      runDateInput.value = '';
+      delayInput.value = '0';
+      timetableInput.value = '[]';
+      reportInput.value = '[]';
+      await loadRunList();
+    }catch(e){
+      showErr(e.message);
+    }
+  };
+</script>
+
+</body>
+</html>

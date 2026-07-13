@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hz</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --sky-dusk: #1b1b3a;
+    --sky-deep: #100f24;
+    --sky-mid: #2c2a55;
+    --candle-gold: #ffc978;
+    --candle-ember: #f4a340;
+    --aurora-lavender: #b98bd9;
+    --cloud-white: #f5f3ff;
+    --muted-teal: #5ec9c0;
+    --soft-rose: #e98074;
+    --early-green: #8bc98f;
+    --line: rgba(245,243,255,0.14);
+  }
+
+  *{ box-sizing: border-box; }
+  html{ scroll-behavior: smooth; }
+  body{
+    margin:0;
+    color: var(--cloud-white);
+    font-family: 'Nunito', sans-serif;
+    line-height:1.6;
+    min-height:100vh;
+  }
+
+  .bg-image{
+    position:fixed; inset:-30px; z-index:-2;
+    background-image: url('https://static.wikia.nocookie.net/sky-children-of-the-light/images/5/57/Isle_SandDunes1.png/revision/latest/scale-to-width-down/1000?cb=20240129024808');
+    background-size: cover;
+    background-position: center 40%;
+    filter: blur(22px) brightness(0.55) saturate(1.05);
+    transform: scale(1.08);
+  }
+  .bg-overlay{
+    position:fixed; inset:0; z-index:-1;
+    background: radial-gradient(ellipse at 50% -10%, rgba(44,42,85,0.55), rgba(27,27,58,0.7) 55%, rgba(16,15,36,0.88) 100%);
+  }
+
+  .stars{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+  .star{
+    position:absolute; width:2px; height:2px; background:var(--cloud-white);
+    border-radius:50%; opacity:0.5; animation: twinkle 4s ease-in-out infinite;
+  }
+  @keyframes twinkle{ 0%,100%{opacity:.15;} 50%{opacity:.85;} }
+
+  h1,h2,h3{ font-family:'Cormorant Garamond', serif; font-weight:600; margin:0; letter-spacing:0.01em; }
+  .mono{ font-family:'JetBrains Mono', monospace; }
+
+  .wrap{ position:relative; z-index:1; max-width: 920px; margin:0 auto; padding: 0 24px 120px; }
+
+  .hero{ padding: 48px 0 40px; text-align:center; }
+  .status-pill{
+    --spc: 139,201,143;
+    display:inline-flex; align-items:center; gap:10px;
+    padding: 10px 22px; border-radius:999px;
+    background: rgba(var(--spc),0.14); border:1px solid rgba(var(--spc),0.4);
+    font-family:'JetBrains Mono'; font-size:13px; color: rgb(var(--spc));
+    transition: background 0.4s ease, border-color 0.4s ease, color 0.4s ease;
+  }
+  .status-pill.late{ --spc: 233,128,116; }
+  .status-pill.early{ --spc: 139,201,143; }
+  .status-pill.none{ --spc: 150,150,165; }
+  .status-pill .dot{
+    width:8px; height:8px; border-radius:50%; background: rgb(var(--spc));
+    box-shadow: 0 0 0 0 rgba(var(--spc),0.6); animation: pulse 2s infinite;
+    transition: background 0.4s ease;
+  }
+  @keyframes pulse{
+    0%{ box-shadow: 0 0 0 0 rgba(var(--spc),0.5); }
+    70%{ box-shadow: 0 0 0 10px rgba(var(--spc),0); }
+    100%{ box-shadow: 0 0 0 0 rgba(var(--spc),0); }
+  }
+  .delay-badge{ font-weight:800; }
+
+  section{ padding: 56px 0; border-top: 1px solid var(--line); }
+  .section-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom: 32px; flex-wrap:wrap; }
+  .section-head .num{ font-family:'JetBrains Mono'; font-size:13px; color: var(--muted-teal); }
+  .section-head h2{ font-size: 30px; color: var(--cloud-white); }
+  .section-sub{ color: rgba(245,243,255,0.55); font-size:14px; margin-top:6px; }
+
+  .progress-shell{ display:grid; grid-template-columns: 64px 1fr; gap: 32px; align-items:stretch; }
+  .candle{
+    position:relative; width:64px; border-radius: 10px 10px 4px 4px;
+    background: linear-gradient(180deg, rgba(245,243,255,0.08), rgba(245,243,255,0.03));
+    border: 1px solid var(--line); overflow:hidden; min-height: 260px;
+  }
+  .candle-fill{
+    position:absolute; bottom:0; left:0; right:0;
+    background: linear-gradient(180deg, var(--candle-gold), var(--candle-ember));
+    transition: height 1.2s ease; border-radius: 4px 4px 0 0;
+  }
+  .flame{
+    position:absolute; top:-22px; left:50%; transform:translateX(-50%);
+    width:14px; height:22px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    background: radial-gradient(circle at 50% 70%, var(--candle-gold), var(--candle-ember) 70%, transparent 100%);
+    filter: blur(0.3px); animation: flicker 2.4s ease-in-out infinite;
+  }
+  @keyframes flicker{
+    0%,100%{ transform:translateX(-50%) scaleY(1) rotate(0deg); opacity:1;}
+    30%{ transform:translateX(-50%) scaleY(1.08) rotate(-2deg); opacity:0.92;}
+    60%{ transform:translateX(-50%) scaleY(0.94) rotate(2deg); opacity:1;}
+  }
+
+  .timeline{ display:flex; flex-direction:column-reverse; gap:0; }
+  .step{
+    display:grid; grid-template-columns: 78px 20px 1fr; gap:14px;
+    align-items:start; padding: 14px 0; border-bottom:1px dashed var(--line); opacity:0.5;
+  }
+  .step:first-child{ border-bottom:none; }
+  .step .time{ font-family:'JetBrains Mono'; font-size:13px; color: rgba(245,243,255,0.6); padding-top:2px; }
+  .step .track{ display:flex; flex-direction:column; align-items:center; height:100%; }
+  .step .node{ width:9px; height:9px; border-radius:50%; background: rgba(245,243,255,0.3); margin-top:5px; }
+  .step .label{ font-size:14.5px; color: rgba(245,243,255,0.75); }
+  .tag{
+    display:inline-block; font-family:'JetBrains Mono'; font-size:11px; padding:2px 8px;
+    border-radius:6px; margin-left:8px; vertical-align:middle;
+  }
+  .tag.afk-ok{ background: rgba(94,201,192,0.14); color: var(--muted-teal); }
+  .tag.afk-no{ background: rgba(233,128,116,0.14); color: var(--soft-rose); }
+
+  .step.current{ opacity:1; }
+  .step.current .node{ background: var(--candle-gold); box-shadow: 0 0 0 4px rgba(255,201,120,0.18); }
+  .step.current .time{ color: var(--candle-gold); }
+  .step.current .label{ color: var(--cloud-white); font-weight:700; }
+  .step.done{ opacity:0.35; }
+  .step.done .node{ background: var(--muted-teal); }
+
+  .report{ border:1px solid var(--line); border-radius:14px; margin-bottom:14px; background: rgba(245,243,255,0.02); }
+  .report summary{
+    cursor:pointer; list-style:none; padding:18px 22px; display:flex; align-items:center; justify-content:space-between; gap:14px;
+  }
+  .report summary::-webkit-details-marker{ display:none; }
+  .report summary .rt{ font-family:'JetBrains Mono'; font-size:13px; color: var(--muted-teal); }
+  .report summary h3{ font-size:18px; font-weight:600; }
+  .report summary::after{ content:'↓'; font-size:12px; color: rgba(245,243,255,0.4); font-family:'JetBrains Mono'; }
+  .report[open] summary::after{ content:'↑'; }
+  .report .log{ padding: 0 22px 22px; }
+  .log-row{ display:grid; grid-template-columns: 70px 78px 1fr; gap:12px; padding:8px 0; border-bottom:1px dashed var(--line); font-size:13.5px; }
+  .log-row:last-of-type{ border-bottom:none; }
+  .log-row .t{ font-family:'JetBrains Mono'; color: rgba(245,243,255,0.55); }
+  .delay{ font-family:'JetBrains Mono'; font-size:12px; padding:1px 7px; border-radius:5px; text-align:center; height:fit-content; white-space:nowrap; }
+  .delay.none{ background: rgba(245,243,255,0.12); color: rgba(245,243,255,0.6); }
+  .delay.plus{ background: rgba(233,128,116,0.16); color: var(--soft-rose); }
+  .delay.minus{ background: rgba(139,201,143,0.16); color: var(--early-green); }
+  .recs{ margin-top:16px; padding-top:16px; border-top:1px solid var(--line); font-size:13.5px; color: rgba(245,243,255,0.7); display:flex; flex-direction:column; gap:8px; }
+  .recs a{ color: var(--candle-gold); text-decoration: underline; text-underline-offset:2px; }
+  .recs a:hover{ color: var(--candle-ember); }
+  .empty-note{ color: rgba(245,243,255,0.4); font-size:14px; }
+
+  footer{ text-align:center; padding: 40px 0 10px; color: rgba(245,243,255,0.35); font-size:12.5px; }
+
+  @media (max-width:560px){
+    .progress-shell{ grid-template-columns: 44px 1fr; gap:18px; }
+    .candle{ width:44px; }
+    .step{ grid-template-columns: 60px 16px 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .flame, .status-pill .dot, .star{ animation:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-image"></div>
+<div class="bg-overlay"></div>
+<div class="stars" id="stars"></div>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">Loading...</span></div>
+  </div>
+
+  <!-- LIVE PROGRESS -->
+  <section id="progress">
+    <div class="section-head">
+      <div>
+        <h2>In Progress</h2>
+        <div class="section-sub" id="liveSub">Waiting for the current run...</div>
+      </div>
+    </div>
+    <div class="progress-shell">
+      <div class="candle">
+        <div class="flame" id="flame"></div>
+        <div class="candle-fill" id="candleFill" style="height:0%"></div>
+      </div>
+      <div class="timeline" id="timeline"></div>
+    </div>
+    <div class="recs" id="announcements" style="margin-top:28px; border-top:1px solid var(--line); padding-top:20px;"></div>
+  </section>
+
+  <!-- ARCHIVE -->
+  <section id="reports">
+    <div class="section-head">
+      <div>
+        <h2>Past Reports</h2>
+      </div>
+    </div>
+    <div id="archiveList"><div class="empty-note">Loading past runs...</div></div>
+  </section>
+
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getFirestore, doc, onSnapshot, collection, query, orderBy
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // ====== 1) PASTE YOUR FIREBASE CONFIG HERE (same object for index.html and admin.html) ======
+  const firebaseConfig = {
+    apiKey: "AIzaSyD4TFAfwXiWSLNGkcXqWLv7cfB85iczmg8",
+    authDomain: "sky-colt-for-candle-run.firebaseapp.com",
+    projectId: "sky-colt-for-candle-run",
+    storageBucket: "sky-colt-for-candle-run.firebasestorage.app",
+    messagingSenderId: "924531234237",
+    appId: "1:924531234237:web:fc6b1e4ea39be1eb58eed4"
+  };
+  // ============================================================================================
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // ---------- Background stars ----------
+  const starsEl = document.getElementById('stars');
+  for(let i=0;i<70;i++){
+    const s = document.createElement('div');
+    s.className='star';
+    s.style.left = Math.random()*100+'%';
+    s.style.top = Math.random()*100+'%';
+    s.style.animationDelay = (Math.random()*4)+'s';
+    starsEl.appendChild(s);
+  }
+
+  // ---------- Timezone helpers ----------
+  // Times are authored in KST (UTC+9) and anchored to the run's own "date" field,
+  // then displayed in each visitor's own browser/device timezone automatically.
+  function kstToDate(dateStr, hhmm){
+    return new Date(`${dateStr}T${hhmm}:00+09:00`);
+  }
+  function formatLocalTime(date){
+    return date.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+  }
+  function formatRelative(date){
+    const diffMin = Math.round((date - new Date()) / 60000);
+    if(diffMin === 0) return 'now';
+    const past = diffMin < 0;
+    const abs = Math.abs(diffMin);
+    const h = Math.floor(abs / 60), m = abs % 60;
+    const span = h > 0 ? `${h}h${m ? ' '+m+'m' : ''}` : `${m}m`;
+    return past ? `${span} ago` : `in ${span}`;
+  }
+  function todayKST(){
+    const now = new Date();
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    return new Date(utc + 9 * 3600000).toISOString().slice(0, 10);
+  }
+  // Replaces {{t:HH:MM}} tokens (KST, anchored to today's date) with a live relative countdown.
+  function renderTimeTokens(text){
+    const today = todayKST();
+    return text.replace(/\{\{t:(\d{2}:\d{2})\}\}/g, (_, hhmm) => {
+      const t = kstToDate(today, hhmm);
+      return formatRelative(t);
+    });
+  }
+
+  function delayStatusText(min){
+    min = Number(min) || 0;
+    if(min === 0) return 'On schedule';
+    const unit = Math.abs(min) === 1 ? 'min' : 'mins';
+    if(min > 0) return `+${min} ${unit} delayed`;
+    return `${Math.abs(min)} ${unit} ahead`;
+  }
+  function delayStatusClass(min){
+    min = Number(min) || 0;
+    if(min > 0) return 'late';
+    if(min < 0) return 'early';
+    return '';
+  }
+
+  // ---------- Render the live run ----------
+  const timelineEl = document.getElementById('timeline');
+  const announcementsEl = document.getElementById('announcements');
+  const liveSubEl = document.getElementById('liveSub');
+  const statusPillEl = document.getElementById('statusPill');
+  const statusTextEl = document.getElementById('statusText');
+
+  let liveRunData = null;
+  let liveTimer = null;
+
+  function renderLiveRun(){
+    if(!liveRunData){
+      timelineEl.innerHTML = '';
+      liveSubEl.textContent = 'No active run.';
+      statusTextEl.textContent = 'No Run is currently active.';
+      statusPillEl.className = 'status-pill none';
+      document.getElementById('candleFill').style.height = '0%';
+      return;
+    }
+    const { date, timetable = [], report = [] } = liveRunData;
+    liveSubEl.textContent = `The candle fills as the run moves forward.`;
+
+    const now = new Date();
+    let currentIdx = -1;
+    timetable.forEach((step, i) => {
+      const stepDate = kstToDate(date, step.time);
+      const nextDate = i < timetable.length-1 ? kstToDate(date, timetable[i+1].time) : new Date(stepDate.getTime()+15*60000);
+      if(now >= stepDate && now < nextDate) currentIdx = i;
+    });
+    if(currentIdx === -1) currentIdx = timetable.length ? timetable.length - 1 : -1;
+
+    timelineEl.innerHTML = '';
+    timetable.forEach((step, i) => {
+      const div = document.createElement('div');
+      let cls = 'step';
+      if(i < currentIdx) cls += ' done';
+      if(i === currentIdx) cls += ' current';
+      div.className = cls;
+      div.innerHTML = `
+        <div class="time">${formatLocalTime(kstToDate(date, step.time))}</div>
+        <div class="track"><div class="node"></div></div>
+        <div class="label">${step.label}<span class="tag ${step.afk ? 'afk-ok':'afk-no'}">${step.afk ? '✅ AFK OK':'❌ No AFK'}</span></div>
+      `;
+      timelineEl.appendChild(div);
+    });
+
+    const pct = timetable.length ? Math.round(((currentIdx+1) / timetable.length) * 100) : 0;
+    document.getElementById('candleFill').style.height = pct + '%';
+    statusTextEl.textContent = delayStatusText(liveRunData.delayMinutes);
+    statusPillEl.className = `status-pill ${delayStatusClass(liveRunData.delayMinutes)}`.trim();
+  }
+
+  // ---------- Global announcements (always shown, independent of any run) ----------
+  let globalAnnouncements = [];
+  function renderAnnouncements(){
+    announcementsEl.innerHTML = globalAnnouncements.map(a => `<div>${renderTimeTokens(a)}</div>`).join('');
+  }
+  onSnapshot(doc(db, 'meta', 'announcements'), (snap) => {
+    globalAnnouncements = snap.exists() ? (snap.data().items || []) : [];
+    renderAnnouncements();
+  });
+  setInterval(renderAnnouncements, 30000);
+
+  function subscribeToRun(runId){
+    if(liveTimer) clearInterval(liveTimer);
+    if(!runId){ liveRunData = null; renderLiveRun(); return; }
+    onSnapshot(doc(db, 'runs', runId), (snap) => {
+      liveRunData = snap.exists() ? snap.data() : null;
+      renderLiveRun();
+    });
+    liveTimer = setInterval(renderLiveRun, 30000); // recompute "current step" every 30s
+  }
+
+  // ---------- Watch meta/current for which run is live ----------
+  let activeRunId = null;
+  onSnapshot(doc(db, 'meta', 'current'), (snap) => {
+    activeRunId = snap.exists() ? snap.data().activeRunId : null;
+    subscribeToRun(activeRunId);
+    renderArchive(); // re-filter archive whenever the active run changes
+  });
+
+  // ---------- Archive (all runs except the currently live one) ----------
+  const archiveListEl = document.getElementById('archiveList');
+  let allRuns = [];
+
+  function renderArchive(){
+    const past = allRuns.filter(r => r.id !== activeRunId);
+    if(past.length === 0){
+      archiveListEl.innerHTML = '<div class="empty-note">No past runs recorded yet.</div>';
+      return;
+    }
+    archiveListEl.innerHTML = past.map(r => {
+      const { id, data } = r;
+      const rows = (data.report || []).map(row => `
+        <div class="log-row">
+          <div class="t">${formatLocalTime(kstToDate(data.date || id, row.time))}</div>
+          <div class="delay ${row.delay}">${row.delayLabel}</div>
+          <div>${row.label}</div>
+        </div>
+      `).join('');
+      return `
+        <details class="report">
+          <summary>
+            <div>
+              <h3>Reports of ${data.date || id}</h3>
+            </div>
+          </summary>
+          <div class="log">${rows || '<div class="empty-note">No report data for this run.</div>'}</div>
+        </details>
+      `;
+    }).join('');
+  }
+
+  onSnapshot(query(collection(db, 'runs'), orderBy('date', 'desc')), (snap) => {
+    allRuns = snap.docs.map(d => ({ id: d.id, data: d.data() }));
+    renderArchive();
+  });
+</script>
+
+</body>
+</html>
