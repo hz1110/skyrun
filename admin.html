@@ -75,6 +75,15 @@
     <div class="msg err" id="errMsg" style="display:none;"></div>
 
     <div class="card">
+      <div class="hint" style="margin-top:0;">Live visitors on the site right now:</div>
+      <div style="display:flex; align-items:flex-end; gap:16px;">
+        <div id="liveVisitorCount" class="mono" style="font-size:22px; font-weight:700; color: var(--candle-gold);">—</div>
+        <svg id="visitorSparkline" viewBox="0 0 240 40" style="flex:1; height:40px; min-width:120px;" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="hint" style="margin-top:8px; margin-bottom:0;">Trend over the last 5 minutes (updates every 5s while this page is open).</div>
+    </div>
+
+    <div class="card">
       <label>Load an existing run, or type a new date (YYYY-MM-DD) to create one</label>
       <select id="runSelect"><option value="">— New run —</option></select>
       <label>Run date (used as the run's ID and its KST anchor date)</label>
@@ -182,6 +191,7 @@
       loadGlobalAnnouncements();
       loadApplyConfig();
       subscribeApplicants();
+      subscribePresence();
     } else {
       loginBox.style.display = 'block';
       hidden.style.display = 'none';
@@ -271,6 +281,62 @@
       showErr(err.message);
     }
   });
+
+  // ---------- Live visitor count (based on heartbeat docs the site writes every 20s) ----------
+  const liveVisitorCountEl = document.getElementById('liveVisitorCount');
+  const visitorSparklineEl = document.getElementById('visitorSparkline');
+  let presenceDocs = [];
+  let visitorHistory = []; // last ~5 minutes of {t, n} samples, kept in memory for this admin session
+
+  function renderVisitorSparkline(){
+    if(visitorHistory.length < 2){ visitorSparklineEl.innerHTML = ''; return; }
+    const w = 240, h = 40, pad = 4;
+    const maxN = Math.max(1, ...visitorHistory.map(p => p.n));
+    const step = (w - pad * 2) / (visitorHistory.length - 1);
+    const points = visitorHistory.map((p, i) => {
+      const x = pad + i * step;
+      const y = h - pad - (p.n / maxN) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    visitorSparklineEl.innerHTML = `
+      <polyline points="${points}" fill="none" stroke="var(--candle-gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    `;
+  }
+
+  function recomputeLiveCount(){
+    const now = Date.now();
+    const online = presenceDocs.filter(p => {
+      const ls = p.lastSeen;
+      if(!ls || !ls.toDate) return false;
+      return (now - ls.toDate().getTime()) < 45000; // missed at most 1 heartbeat (20s) + buffer
+    });
+    liveVisitorCountEl.textContent = `${online.length} 🟢`;
+
+    visitorHistory.push({ t: now, n: online.length });
+    const cutoff = now - 5 * 60000;
+    visitorHistory = visitorHistory.filter(p => p.t >= cutoff);
+    renderVisitorSparkline();
+  }
+
+  async function cleanupStalePresence(){
+    const snap = await getDocs(collection(db, 'presence'));
+    const now = Date.now();
+    const stale = snap.docs.filter(d => {
+      const ls = d.data().lastSeen;
+      return !ls || !ls.toDate || (now - ls.toDate().getTime()) > 10 * 60000; // 10+ min old
+    });
+    await Promise.all(stale.map(d => deleteDoc(d.ref)));
+  }
+
+  function subscribePresence(){
+    onSnapshot(collection(db, 'presence'), (snap) => {
+      presenceDocs = snap.docs.map(d => d.data());
+      recomputeLiveCount();
+    });
+    setInterval(recomputeLiveCount, 5000);
+    cleanupStalePresence();
+    setInterval(cleanupStalePresence, 5 * 60000);
+  }
 
   runSelect.onchange = async () => {
     const id = runSelect.value;

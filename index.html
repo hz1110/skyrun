@@ -197,6 +197,29 @@
   .apply-msg.err{ color: var(--soft-rose); }
   .apply-closed{ color: rgba(245,243,255,0.6); font-size:14.5px; }
 
+  .loading-screen{
+    position:fixed; inset:0; z-index:100; background: var(--sky-deep);
+    display:flex; align-items:center; justify-content:center; flex-direction:column; gap:16px;
+    transition: opacity 0.6s ease;
+  }
+  .loading-screen.hide{ opacity:0; pointer-events:none; }
+  .loading-flame{
+    width:16px; height:26px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    background: radial-gradient(circle at 50% 70%, var(--candle-gold), var(--candle-ember) 70%, transparent 100%);
+    filter: blur(0.3px);
+    box-shadow: 0 0 14px 4px rgba(255,201,120,0.65), 0 0 28px 10px rgba(244,163,64,0.3);
+    animation: flicker-loading 2.4s ease-in-out infinite;
+  }
+  @keyframes flicker-loading{
+    0%,100%{ transform: scaleY(1) rotate(0deg); opacity:1;}
+    30%{ transform: scaleY(1.08) rotate(-2deg); opacity:0.92;}
+    60%{ transform: scaleY(0.94) rotate(2deg); opacity:1;}
+  }
+  .loading-text{ font-family:'JetBrains Mono'; font-size:13px; color: rgba(245,243,255,0.45); letter-spacing:0.04em; }
+  @media (prefers-reduced-motion: reduce){
+    .loading-flame{ animation:none !important; }
+  }
+
   .modal-overlay{
     position:fixed; inset:0; background: rgba(16,15,36,0.75); backdrop-filter: blur(3px);
     z-index:50; display:flex; align-items:center; justify-content:center; padding:20px;
@@ -231,6 +254,11 @@
 </style>
 </head>
 <body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-flame"></div>
+  <div class="loading-text">Loading...</div>
+</div>
 
 <div class="bg-image"></div>
 <div class="bg-overlay"></div>
@@ -315,10 +343,14 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="submitStatusModal" style="display:none;">
+  <div class="modal-box" id="submitStatusBox" style="text-align:center;"></div>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, doc, onSnapshot, collection, query, orderBy, runTransaction, serverTimestamp
+    getFirestore, doc, setDoc, onSnapshot, collection, query, orderBy, runTransaction, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // ====== 1) PASTE YOUR FIREBASE CONFIG HERE (same object for index.html and admin.html) ======
@@ -334,6 +366,30 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+
+  // ---------- Loading screen (hidden once the first round of data has arrived) ----------
+  const loadingScreenEl = document.getElementById('loadingScreen');
+  const loadFlags = { current: false, announcements: false, applications: false, runs: false, liveRun: false };
+  let liveRunNeeded = false;
+  let loadingHidden = false;
+
+  function hideLoadingScreen(){
+    if(loadingHidden) return;
+    loadingHidden = true;
+    loadingScreenEl.classList.add('hide');
+    setTimeout(() => { loadingScreenEl.style.display = 'none'; }, 650);
+  }
+  function checkAllLoaded(){
+    const required = ['current', 'announcements', 'applications', 'runs'];
+    if(liveRunNeeded) required.push('liveRun');
+    if(required.every(k => loadFlags[k])) hideLoadingScreen();
+  }
+  function markLoadedOnce(key){
+    if(loadFlags[key]) return;
+    loadFlags[key] = true;
+    checkAllLoaded();
+  }
+  setTimeout(hideLoadingScreen, 8000); // failsafe in case something never resolves
 
   // ---------- Background stars ----------
   const starsEl = document.getElementById('stars');
@@ -481,15 +537,17 @@
   onSnapshot(doc(db, 'meta', 'announcements'), (snap) => {
     globalAnnouncements = snap.exists() ? (snap.data().items || []) : [];
     renderAnnouncements();
+    markLoadedOnce('announcements');
   });
   setInterval(renderAnnouncements, 30000);
 
   function subscribeToRun(runId){
     if(liveTimer) clearInterval(liveTimer);
-    if(!runId){ liveRunData = null; renderLiveRun(); return; }
+    if(!runId){ liveRunData = null; renderLiveRun(); markLoadedOnce('liveRun'); return; }
     onSnapshot(doc(db, 'runs', runId), (snap) => {
       liveRunData = snap.exists() ? snap.data() : null;
       renderLiveRun();
+      markLoadedOnce('liveRun');
     });
     liveTimer = setInterval(renderLiveRun, 30000); // recompute "current step" every 30s
   }
@@ -498,8 +556,10 @@
   let activeRunId = null;
   onSnapshot(doc(db, 'meta', 'current'), (snap) => {
     activeRunId = snap.exists() ? snap.data().activeRunId : null;
+    if(activeRunId) liveRunNeeded = true;
     subscribeToRun(activeRunId);
     renderArchive(); // re-filter archive whenever the active run changes
+    markLoadedOnce('current');
   });
 
   // ---------- Archive (all runs except the currently live one) ----------
@@ -552,7 +612,20 @@
     allRuns = snap.docs.map(d => ({ id: d.id, data: d.data() }));
     renderArchive();
     updateDiscordCutoff();
+    markLoadedOnce('runs');
   });
+
+  // ---------- Presence heartbeat (lets the admin page see how many people are viewing) ----------
+  let visitorId = sessionStorage.getItem('skyrunVisitorId');
+  if(!visitorId){
+    visitorId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    sessionStorage.setItem('skyrunVisitorId', visitorId);
+  }
+  function sendHeartbeat(){
+    setDoc(doc(db, 'presence', visitorId), { lastSeen: serverTimestamp() }).catch(() => {});
+  }
+  sendHeartbeat();
+  setInterval(sendHeartbeat, 20000);
 
   // ---------- Apply to join ----------
   const applySectionEl = document.getElementById('apply');
@@ -572,7 +645,7 @@
 
     if(remaining <= 0){
       applySubEl.textContent = '';
-      applyBodyEl.innerHTML = `<div class="apply-closed">Applications are closed.</div>`;
+      applyBodyEl.innerHTML = `<div class="apply-closed">Applications are closed for now.<br>The roster isn't finalized until this section is removed! Please wait for applications to reopen!</div>`;
       return;
     }
 
@@ -629,17 +702,27 @@
     pendingApplication = null;
   };
 
+  const submitStatusModalEl = document.getElementById('submitStatusModal');
+  const submitStatusBoxEl = document.getElementById('submitStatusBox');
+
+  function showSubmitStatus(html){
+    submitStatusBoxEl.innerHTML = html;
+    submitStatusModalEl.style.display = 'flex';
+  }
+  submitStatusModalEl.addEventListener('click', (e) => {
+    if(e.target.id === 'statusCloseBtn') submitStatusModalEl.style.display = 'none';
+  });
+
   document.getElementById('rulesAgreeBtn').onclick = async () => {
     if(!pendingApplication) return;
     const { discord, nickname, friendCode, alreadyFriends } = pendingApplication;
     rulesModalEl.style.display = 'none';
     pendingApplication = null;
 
-    const submitBtn = document.getElementById('applySubmitBtn');
-    const msgEl = document.getElementById('applyMsg');
-    submitBtn.disabled = true;
-    msgEl.className = 'apply-msg';
-    msgEl.textContent = 'Submitting...';
+    showSubmitStatus(`
+      <div class="loading-flame" style="margin:0 auto 16px;"></div>
+      <div class="loading-text">Submitting...</div>
+    `);
 
     try{
       const metaRef = doc(db, 'meta', 'applications');
@@ -654,17 +737,26 @@
         tx.set(appRef, { discord, nickname, friendCode, alreadyFriends, submittedAt: serverTimestamp() });
         tx.set(metaRef, { ...data, count: count + 1 }, { merge: true });
       });
-      applyBodyEl.innerHTML = `<div class="apply-msg ok">✅ Application submitted! We'll reach out on Discord.</div>`;
+      applyBodyEl.innerHTML = `<div class="apply-msg ok">✅ Application submitted!</div>`;
+      showSubmitStatus(`
+        <h3>🎉 You're in!</h3>
+        <p class="apply-msg ok" style="margin:14px 0 20px;">Application submitted!</p>
+        <button type="button" class="apply-btn" id="statusCloseBtn" style="width:100%;">Close</button>
+      `);
     }catch(err){
-      submitBtn.disabled = false;
-      msgEl.className = 'apply-msg err';
-      msgEl.textContent = err.message || 'Something went wrong. Please try again.';
+      const full = (err.message || '').includes('filled up') || (err.message || '').includes('just closed');
+      showSubmitStatus(`
+        <h3>${full ? '😢 Spot already taken' : 'Something went wrong'}</h3>
+        <p class="apply-msg err" style="margin:14px 0 20px;">${full ? "Someone grabbed the last spot just before you. Applications are now closed." : (err.message || 'Please try again.')}</p>
+        <button type="button" class="apply-btn" id="statusCloseBtn" style="width:100%;">Close</button>
+      `);
     }
   };
 
   onSnapshot(doc(db, 'meta', 'applications'), (snap) => {
     applyConfig = snap.exists() ? snap.data() : null;
     renderApply();
+    markLoadedOnce('applications');
   });
 </script>
 
