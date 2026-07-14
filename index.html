@@ -511,10 +511,8 @@
     document.getElementById('candleFill').style.height = pct + '%';
 
     // Real-time candle + status badge: both driven by the admin's Report field,
-    // colored by the most recently logged delay. Each report entry describes a
-    // step that's already been *done*, so the live fill sits one step ahead of
-    // the planned graph's step count (we're working toward the next one).
-    const reportPct = (timetable.length && report.length) ? Math.min(100, Math.round(((report.length + 1) / timetable.length) * 100)) : 0;
+    // colored by the most recently logged delay.
+    const reportPct = timetable.length ? Math.min(100, Math.round((report.length / timetable.length) * 100)) : 0;
     realtimeCandleFillEl.style.height = reportPct + '%';
     const lastReport = report[report.length - 1];
     const reportCls = delayClassFromReport(lastReport ? lastReport.delay : 'none');
