@@ -75,6 +75,17 @@
     <div class="msg err" id="errMsg" style="display:none;"></div>
 
     <div class="card">
+      <label>Maintenance Mode — while On, index.html shows a maintenance screen to everyone instead of the site</label>
+      <select id="maintenanceEnabledInput">
+        <option value="false">Off</option>
+        <option value="true">On</option>
+      </select>
+      <label>Message shown to visitors</label>
+      <textarea id="maintenanceMsgInput" style="min-height:60px;">We're doing a bit of upkeep — check back soon!</textarea>
+      <button class="btn-primary" id="saveMaintenanceBtn">Save Maintenance Settings</button>
+    </div>
+
+    <div class="card">
       <div class="hint" style="margin-top:0;">Live visitors on the site right now:</div>
       <div style="display:flex; align-items:flex-end; gap:16px;">
         <div id="liveVisitorCount" class="mono" style="font-size:22px; font-weight:700; color: var(--candle-gold);">—</div>
@@ -89,15 +100,20 @@
       <label>Run date (used as the run's ID and its KST anchor date)</label>
       <input id="runDate" type="text" placeholder="2026-07-13">
 
+      <label>Run Type — controls which graphic shows in the Live section</label>
+      <select id="runTypeInput">
+        <option value="candle">Candle Run (wax candle)</option>
+        <option value="eden">Eden Run (Eden candle)</option>
+        <option value="wingLight">Wing Light Run (Sky kid silhouette)</option>
+      </select>
+
       <label>Timetable (JSON array — planned schedule, shown in Live section)</label>
-      <div class="hint">Fields: time ("HH:MM" in KST), label, afk (true/false)</div>
       <textarea id="timetableInput">[
   { "time": "15:53", "label": "We all need to stay together!", "afk": true },
   { "time": "15:55", "label": "Fire Trial", "afk": false }
 ]</textarea>
 
       <label>Report (JSON array — actual timing; also drives the live status badge and the "Live" half of the candle while the run is active, and is shown in full once archived)</label>
-      <div class="hint">Fields: time, label, delay ("plus" / "minus" / "none"), minutes (number, e.g. 2 — how many minutes off), delayLabel (shown in the archived report, e.g. "+1 min", "-2 mins", "No Delay"). The last entry in the array is treated as the current status — its delay + minutes auto-build the live "N min(s) ahead/delayed" text, so you don't have to hand-type that sentence.</div>
       <textarea id="reportInput">[
   { "time": "15:53", "label": "Fire Trial", "delay": "minus", "minutes": 2, "delayLabel": "-2 mins" }
 ]</textarea>
@@ -190,6 +206,7 @@
       loadCurrentLive();
       loadGlobalAnnouncements();
       loadApplyConfig();
+      loadMaintenanceConfig();
       subscribeApplicants();
       subscribePresence();
     } else {
@@ -201,9 +218,12 @@
   // ---------- Run list dropdown ----------
   const runSelect = document.getElementById('runSelect');
   const runDateInput = document.getElementById('runDate');
+  const runTypeInput = document.getElementById('runTypeInput');
   const timetableInput = document.getElementById('timetableInput');
   const reportInput = document.getElementById('reportInput');
   const globalAnnouncementsInput = document.getElementById('globalAnnouncementsInput');
+  const maintenanceEnabledInput = document.getElementById('maintenanceEnabledInput');
+  const maintenanceMsgInput = document.getElementById('maintenanceMsgInput');
   const applyEnabledInput = document.getElementById('applyEnabledInput');
   const applyMaxInput = document.getElementById('applyMaxInput');
   const applyCountHint = document.getElementById('applyCountHint');
@@ -215,20 +235,37 @@
   function showOk(msg){ saveMsg.style.display='block'; saveMsg.textContent = msg; errMsg.style.display='none'; setTimeout(()=>saveMsg.style.display='none', 3500); }
   function showErr(msg){ errMsg.style.display='block'; errMsg.textContent = msg; saveMsg.style.display='none'; }
 
+  function runTypeLabel(type){
+    if(type === 'eden') return 'Eden Run';
+    if(type === 'wingLight') return 'Wing Light Run';
+    return 'Candle Run';
+  }
+  // Each run is stored under its own "date_type" document, so a Candle Run
+  // and a Wing Light Run on the same date never overwrite each other.
+  function makeRunId(runDate, runType){
+    return `${runDate}_${runType}`;
+  }
+
   async function loadRunList(){
     const snap = await getDocs(query(collection(db, 'runs'), orderBy('date', 'desc')));
     runSelect.innerHTML = '<option value="">— New run —</option>';
     snap.forEach(d => {
+      const data = d.data();
       const opt = document.createElement('option');
       opt.value = d.id;
-      opt.textContent = d.id;
+      opt.textContent = `${data.date || d.id} · ${runTypeLabel(data.runType)}`;
       runSelect.appendChild(opt);
     });
   }
 
   async function loadCurrentLive(){
     const snap = await getDoc(doc(db, 'meta', 'current'));
-    currentLiveDisplay.textContent = snap.exists() && snap.data().activeRunId ? snap.data().activeRunId : 'None';
+    const activeRunId = snap.exists() ? snap.data().activeRunId : null;
+    if(!activeRunId){ currentLiveDisplay.textContent = 'None'; return; }
+    const runSnap = await getDoc(doc(db, 'runs', activeRunId));
+    currentLiveDisplay.textContent = runSnap.exists()
+      ? `${runSnap.data().date || activeRunId} · ${runTypeLabel(runSnap.data().runType)}`
+      : activeRunId;
   }
 
   async function loadGlobalAnnouncements(){
@@ -242,6 +279,13 @@
     applyEnabledInput.value = String(!!data.enabled);
     applyMaxInput.value = data.maxSlots ?? 0;
     applyCountHint.textContent = `Current applicants: ${data.count ?? 0} / ${data.maxSlots ?? 0}`;
+  }
+
+  async function loadMaintenanceConfig(){
+    const snap = await getDoc(doc(db, 'meta', 'maintenance'));
+    const data = snap.exists() ? snap.data() : { enabled: false, message: '' };
+    maintenanceEnabledInput.value = String(!!data.enabled);
+    maintenanceMsgInput.value = data.message || "We're doing a bit of upkeep — check back soon!";
   }
 
   function subscribeApplicants(){
@@ -342,6 +386,7 @@
     const id = runSelect.value;
     if(!id){
       runDateInput.value = '';
+      runTypeInput.value = 'candle';
       timetableInput.value = '[]';
       reportInput.value = '[]';
       return;
@@ -350,6 +395,7 @@
     if(snap.exists()){
       const data = snap.data();
       runDateInput.value = data.date || id;
+      runTypeInput.value = data.runType || 'candle';
       timetableInput.value = JSON.stringify(data.timetable || [], null, 2);
       reportInput.value = JSON.stringify(data.report || [], null, 2);
     }
@@ -365,13 +411,15 @@
 
   document.getElementById('saveBtn').onclick = async () => {
     try{
-      const runId = runDateInput.value.trim();
-      if(!/^\d{4}-\d{2}-\d{2}$/.test(runId)) throw new Error('Run date must look like 2026-07-13.');
+      const runDate = runDateInput.value.trim();
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(runDate)) throw new Error('Run date must look like 2026-07-13.');
+      const runType = runTypeInput.value;
+      const runId = makeRunId(runDate, runType);
       const timetable = parseJsonField(timetableInput, 'Timetable');
       const report = parseJsonField(reportInput, 'Report');
 
-      await setDoc(doc(db, 'runs', runId), { date: runId, timetable, report });
-      showOk(`Saved run ${runId}.`);
+      await setDoc(doc(db, 'runs', runId), { date: runDate, runType, timetable, report });
+      showOk(`Saved ${runTypeLabel(runType)} for ${runDate}.`);
       await loadRunList();
       runSelect.value = runId;
     }catch(e){
@@ -384,6 +432,17 @@
       const items = parseJsonField(globalAnnouncementsInput, 'Announcements');
       await setDoc(doc(db, 'meta', 'announcements'), { items });
       showOk('Saved announcements.');
+    }catch(e){
+      showErr(e.message);
+    }
+  };
+
+  document.getElementById('saveMaintenanceBtn').onclick = async () => {
+    try{
+      const enabled = maintenanceEnabledInput.value === 'true';
+      const message = maintenanceMsgInput.value.trim();
+      await setDoc(doc(db, 'meta', 'maintenance'), { enabled, message });
+      showOk(enabled ? 'Maintenance mode is ON — the site is hidden from visitors.' : 'Maintenance mode is OFF.');
     }catch(e){
       showErr(e.message);
     }
@@ -416,10 +475,13 @@
 
   document.getElementById('setLiveBtn').onclick = async () => {
     try{
-      const runId = runDateInput.value.trim();
-      if(!runId) throw new Error('Save the run first, then set it live.');
+      const runDate = runDateInput.value.trim();
+      if(!runDate) throw new Error('Save the run first, then set it live.');
+      const runId = makeRunId(runDate, runTypeInput.value);
+      const runSnap = await getDoc(doc(db, 'runs', runId));
+      if(!runSnap.exists()) throw new Error('Save the run first, then set it live.');
       await setDoc(doc(db, 'meta', 'current'), { activeRunId: runId });
-      showOk(`${runId} is now the live run.`);
+      showOk(`${runTypeLabel(runTypeInput.value)} (${runDate}) is now the live run.`);
       loadCurrentLive();
     }catch(e){
       showErr(e.message);
@@ -438,13 +500,14 @@
 
   document.getElementById('deleteBtn').onclick = async () => {
     try{
-      const runId = runDateInput.value.trim();
-      if(!runId) throw new Error('No run selected to delete.');
+      const runId = runSelect.value;
+      if(!runId) throw new Error('Select a saved run from the dropdown to delete it.');
       if(!confirm(`Delete run ${runId}? This cannot be undone.`)) return;
       await deleteDoc(doc(db, 'runs', runId));
       showOk(`Deleted run ${runId}.`);
       runSelect.value = '';
       runDateInput.value = '';
+      runTypeInput.value = 'candle';
       timetableInput.value = '[]';
       reportInput.value = '[]';
       await loadRunList();

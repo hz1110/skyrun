@@ -89,12 +89,31 @@
   .section-head h2{ font-size: 30px; color: var(--cloud-white); }
   .section-sub{ color: rgba(245,243,255,0.55); font-size:14px; margin-top:6px; }
 
-  .progress-shell{ display:grid; grid-template-columns: 64px 1fr; gap: 32px; align-items:stretch; }
+  .progress-shell{ display:grid; grid-template-columns: minmax(64px, max-content) 1fr; gap: 32px; align-items:stretch; }
+  .run-graphic{ position:relative; height:100%; max-width:240px; }
+  .run-graphic > *{ height:100%; }
   .candle{
     position:relative; width:64px; border-radius: 10px 10px 4px 4px;
     background: linear-gradient(180deg, rgba(245,243,255,0.08), rgba(245,243,255,0.03));
     border: 1px solid var(--line); overflow:hidden; min-height: 80px;
   }
+  /* Sized by aspect-ratio (set per graphic) so the box's width always matches
+     its real image proportions instead of squeezing into a fixed-width column. */
+  .image-fill{ position:relative; height:100%; min-height: 80px; }
+  .image-fill img{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:contain; object-position:bottom;
+  }
+  .image-fill-bg{ filter: grayscale(1) brightness(0.4); opacity:0.5; }
+  .image-fill-fg{
+    filter: drop-shadow(0 0 8px rgba(255,201,120,0.55)) saturate(1.15);
+    transition: clip-path 1.2s ease;
+  }
+  /* Live half swaps its src to a pre-colored PNG (see setRunGraphic) instead of
+     CSS-masking a tint on top — masking a local file:// image silently fails
+     to render in some browsers, while a plain <img src> always loads fine. */
+  .image-fill-fg.live.late{ filter: drop-shadow(0 0 8px rgba(233,128,116,0.55)); }
+  .image-fill-fg.live.early{ filter: drop-shadow(0 0 8px rgba(139,201,143,0.55)); }
   .candle-fill{
     position:absolute; bottom:0; width:50%; color: var(--candle-gold);
     background: linear-gradient(180deg, var(--candle-gold), var(--candle-ember));
@@ -220,6 +239,14 @@
     .loading-flame{ animation:none !important; }
   }
 
+  .maintenance-screen{
+    position:fixed; inset:0; z-index:200; background: var(--sky-deep);
+    display:flex; align-items:center; justify-content:center; flex-direction:column; gap:18px;
+    text-align:center; padding:32px;
+  }
+  .maintenance-screen h2{ font-size:26px; color: var(--cloud-white); }
+  .maintenance-screen p{ max-width:380px; color: rgba(245,243,255,0.6); font-size:14.5px; line-height:1.6; }
+
   .modal-overlay{
     position:fixed; inset:0; background: rgba(16,15,36,0.75); backdrop-filter: blur(3px);
     z-index:50; display:flex; align-items:center; justify-content:center; padding:20px;
@@ -244,7 +271,7 @@
   footer{ text-align:center; padding: 40px 0 10px; color: rgba(245,243,255,0.35); font-size:12.5px; }
 
   @media (max-width:560px){
-    .progress-shell{ grid-template-columns: 44px 1fr; gap:18px; }
+    .progress-shell{ grid-template-columns: minmax(44px, max-content) 1fr; gap:18px; }
     .candle{ width:44px; }
     .step{ grid-template-columns: 60px 16px 1fr; }
   }
@@ -254,6 +281,12 @@
 </style>
 </head>
 <body>
+
+<div class="maintenance-screen" id="maintenanceScreen" style="display:none;">
+  <div class="loading-flame"></div>
+  <h2>Unavailable</h2>
+  <p id="maintenanceMsg">We're doing a bit of upkeep — check back soon!</p>
+</div>
 
 <div class="loading-screen" id="loadingScreen">
   <div class="loading-flame"></div>
@@ -289,10 +322,22 @@
       </div>
     </div>
     <div class="progress-shell">
-      <div class="candle">
-        <div class="flame" id="flame"></div>
-        <div class="candle-fill planned" id="candleFill" style="height:0%"></div>
-        <div class="candle-fill live" id="realtimeCandleFill" style="height:0%"></div>
+      <div class="run-graphic" id="runGraphic">
+        <div class="candle" id="graphicCandle">
+          <div class="flame" id="flame"></div>
+          <div class="candle-fill planned" id="candleFill" style="height:0%"></div>
+          <div class="candle-fill live" id="realtimeCandleFill" style="height:0%"></div>
+        </div>
+        <div class="image-fill" id="graphicEden" style="display:none; aspect-ratio: 360 / 360;">
+          <img class="image-fill-bg" src="assets/eden-candle.png" alt="">
+          <img class="image-fill-fg" id="edenFillPlanned" src="assets/eden-candle.png" alt="" style="clip-path: inset(100% 50% 0 0);">
+          <img class="image-fill-fg live" id="edenFillLive" src="assets/eden-candle.png" alt="" style="clip-path: inset(100% 0 0 50%);">
+        </div>
+        <div class="image-fill" id="graphicWingLight" style="display:none; aspect-ratio: 435 / 1100;">
+          <img class="image-fill-bg" src="assets/wing-light.png" alt="">
+          <img class="image-fill-fg" id="wingLightFillPlanned" src="assets/wing-light.png" alt="" style="clip-path: inset(100% 50% 0 0);">
+          <img class="image-fill-fg live" id="wingLightFillLive" src="assets/wing-light.png" alt="" style="clip-path: inset(100% 0 0 50%);">
+        </div>
       </div>
       <div class="timeline" id="timeline"></div>
     </div>
@@ -366,6 +411,19 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+
+  // ---------- Maintenance mode (checked first — covers everything else while on) ----------
+  const maintenanceScreenEl = document.getElementById('maintenanceScreen');
+  const maintenanceMsgEl = document.getElementById('maintenanceMsg');
+  onSnapshot(doc(db, 'meta', 'maintenance'), (snap) => {
+    const data = snap.exists() ? snap.data() : { enabled: false };
+    if(data.enabled){
+      maintenanceMsgEl.textContent = data.message || "We're doing a bit of upkeep — check back soon!";
+      maintenanceScreenEl.style.display = 'flex';
+    } else {
+      maintenanceScreenEl.style.display = 'none';
+    }
+  });
 
   // ---------- Loading screen (hidden once the first round of data has arrived) ----------
   const loadingScreenEl = document.getElementById('loadingScreen');
@@ -464,6 +522,61 @@
   const statusPillEl = document.getElementById('statusPill');
   const statusTextEl = document.getElementById('statusText');
 
+  // ---------- Run graphic (candle / eden / wingLight, picked by the run's runType) ----------
+  const runGraphicEl = document.getElementById('runGraphic');
+  const graphicEls = {
+    candle: document.getElementById('graphicCandle'),
+    eden: document.getElementById('graphicEden'),
+    wingLight: document.getElementById('graphicWingLight'),
+  };
+  const imageGraphics = {
+    eden: { planned: document.getElementById('edenFillPlanned'), live: document.getElementById('edenFillLive') },
+    wingLight: { planned: document.getElementById('wingLightFillPlanned'), live: document.getElementById('wingLightFillLive') },
+  };
+
+  // Natural width/height ratio of each source image — fixed constants, never
+  // measured from the (possibly already-resized) element itself. Measuring
+  // the box's own rendered size to decide its next size caused a feedback
+  // loop that made it flicker larger/smaller on every re-render.
+  const GRAPHIC_ASPECT = { eden: 360 / 360, wingLight: 435 / 1100 };
+  const GRAPHIC_ASSET = { eden: 'eden-candle', wingLight: 'wing-light' };
+  const GRAPHIC_MAX_W = 240;
+
+  function setRunGraphic(runType, plannedPct, livePct, liveCls){
+    const type = graphicEls[runType] ? runType : 'candle';
+    Object.entries(graphicEls).forEach(([key, el]) => {
+      el.style.display = key === type ? '' : 'none';
+    });
+    const g = imageGraphics[type];
+    if(!g){
+      runGraphicEl.style.removeProperty('width');
+      return;
+    }
+    g.planned.style.clipPath = `inset(${100 - plannedPct}% 50% 0 0)`;
+    g.live.style.clipPath = `inset(${100 - livePct}% 0 0 50%)`;
+    g.live.className = `image-fill-fg live ${liveCls || ''}`.trim();
+    // Pre-colored PNG per status, swapped in directly — see the comment on
+    // .image-fill-fg.live above for why this replaced CSS masking.
+    const suffix = liveCls ? `-${liveCls}` : '';
+    g.live.src = `assets/${GRAPHIC_ASSET[type]}${suffix}.png`;
+
+    // Size the box from the timeline's own height (unaffected by the graphic
+    // column's width) and the image's fixed aspect ratio — always the same
+    // output for the same input, so it can't oscillate between renders.
+    const availableH = timelineEl.offsetHeight || 80;
+    const ratio = GRAPHIC_ASPECT[type];
+    let h = availableH;
+    let w = h * ratio;
+    if(w > GRAPHIC_MAX_W){
+      w = GRAPHIC_MAX_W;
+      h = GRAPHIC_MAX_W / ratio;
+    }
+    const imageBox = graphicEls[type];
+    imageBox.style.height = h + 'px';
+    imageBox.style.width = w + 'px';
+    runGraphicEl.style.width = w + 'px';
+  }
+
   let liveRunData = null;
   let liveTimer = null;
 
@@ -476,9 +589,10 @@
       document.getElementById('candleFill').style.height = '0%';
       realtimeCandleFillEl.style.height = '0%';
       realtimeCandleFillEl.className = 'candle-fill live';
+      setRunGraphic('candle', 0, 0, '');
       return;
     }
-    const { date, timetable = [], report = [] } = liveRunData;
+    const { date, timetable = [], report = [], runType = 'candle' } = liveRunData;
     liveSubEl.textContent = `The candle fills as the run moves forward.`;
 
     const now = new Date();
@@ -502,7 +616,7 @@
       div.innerHTML = `
         <div class="time">${formatLocalTime(kstToDate(date, step.time))}</div>
         <div class="track"><div class="node"></div></div>
-        <div class="label">${step.label}<span class="tag ${step.afk ? 'afk-ok':'afk-no'}">${step.afk ? '✅ AFK OK':'❌ No AFK'}</span></div>
+        <div class="label">${step.label}${runType === 'candle' ? `<span class="tag ${step.afk ? 'afk-ok':'afk-no'}">${step.afk ? '✅ AFK OK':'❌ No AFK'}</span>` : ''}</div>
       `;
       timelineEl.appendChild(div);
     });
@@ -517,6 +631,8 @@
     const lastReport = report[report.length - 1];
     const reportCls = delayClassFromReport(lastReport ? lastReport.delay : 'none');
     realtimeCandleFillEl.className = `candle-fill live ${reportCls}`.trim();
+
+    setRunGraphic(runType, pct, reportPct, reportCls);
 
     if(currentIdx === -1){
       statusTextEl.textContent = 'No Run is currently active.';
@@ -564,6 +680,12 @@
   const archiveListEl = document.getElementById('archiveList');
   let allRuns = [];
 
+  function runTypeLabel(type){
+    if(type === 'eden') return 'Eden Run';
+    if(type === 'wingLight') return 'Wing Light Run';
+    return 'Candle Run';
+  }
+
   function renderArchive(){
     const past = allRuns.filter(r => r.id !== activeRunId);
     if(past.length === 0){
@@ -583,7 +705,7 @@
         <details class="report">
           <summary>
             <div>
-              <h3>Reports of ${data.date || id}</h3>
+              <h3>Report of ${runTypeLabel(data.runType)} at ${data.date || id}</h3>
             </div>
           </summary>
           <div class="log">${rows || '<div class="empty-note">No report data for this run.</div>'}</div>
