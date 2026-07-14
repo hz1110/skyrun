@@ -14,7 +14,6 @@
     --sky-mid: #2c2a55;
     --candle-gold: #ffc978;
     --candle-ember: #f4a340;
-    --aurora-lavender: #b98bd9;
     --cloud-white: #f5f3ff;
     --muted-teal: #5ec9c0;
     --soft-rose: #e98074;
@@ -54,7 +53,6 @@
   @keyframes twinkle{ 0%,100%{opacity:.15;} 50%{opacity:.85;} }
 
   h1,h2,h3{ font-family:'Cormorant Garamond', serif; font-weight:600; margin:0; letter-spacing:0.01em; }
-  .mono{ font-family:'JetBrains Mono', monospace; }
 
   .wrap{ position:relative; z-index:1; max-width: 920px; margin:0 auto; padding: 0 24px 120px; }
 
@@ -68,7 +66,6 @@
     transition: background 0.4s ease, border-color 0.4s ease, color 0.4s ease;
   }
   .status-pill.late{ --spc: 233,128,116; }
-  .status-pill.early{ --spc: 139,201,143; }
   .status-pill.none{ --spc: 150,150,165; }
   .status-pill .dot{
     width:8px; height:8px; border-radius:50%; background: rgb(var(--spc));
@@ -80,26 +77,29 @@
     70%{ box-shadow: 0 0 0 10px rgba(var(--spc),0); }
     100%{ box-shadow: 0 0 0 0 rgba(var(--spc),0); }
   }
-  .delay-badge{ font-weight:800; }
-
   section{ padding: 56px 0; border-top: 1px solid var(--line); }
   .section-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom: 32px; flex-wrap:wrap; }
   #apply .section-head{ margin-bottom: 12px; }
-  .section-head .num{ font-family:'JetBrains Mono'; font-size:13px; color: var(--muted-teal); }
   .section-head h2{ font-size: 30px; color: var(--cloud-white); }
   .section-sub{ color: rgba(245,243,255,0.55); font-size:14px; margin-top:6px; }
 
   .progress-shell{ display:grid; grid-template-columns: minmax(64px, max-content) 1fr; gap: 32px; align-items:stretch; }
-  .run-graphic{ position:relative; height:100%; max-width:240px; }
-  .run-graphic > *{ height:100%; }
+  .run-graphic{
+    position:relative; height:100%; max-width:240px;
+    display:flex; flex-direction:column; justify-content:center;
+  }
+  .run-graphic .candle{ height:100%; }
   .candle{
     position:relative; width:64px; border-radius: 10px 10px 4px 4px;
     background: linear-gradient(180deg, rgba(245,243,255,0.08), rgba(245,243,255,0.03));
     border: 1px solid var(--line); overflow:hidden; min-height: 80px;
   }
   /* Sized by aspect-ratio (set per graphic) so the box's width always matches
-     its real image proportions instead of squeezing into a fixed-width column. */
-  .image-fill{ position:relative; height:100%; min-height: 80px; }
+     its real image proportions instead of squeezing into a fixed-width column.
+     Its height can end up shorter than the row (capped by GRAPHIC_MAX_W), so
+     the flex centering above keeps it vertically centered against the text
+     instead of pinned to the top with empty space below. */
+  .image-fill{ position:relative; min-height: 80px; flex-shrink:0; }
   .image-fill img{
     position:absolute; inset:0; width:100%; height:100%;
     object-fit:contain; object-position:bottom;
@@ -284,7 +284,7 @@
 
 <div class="maintenance-screen" id="maintenanceScreen" style="display:none;">
   <div class="loading-flame"></div>
-  <h2>Unavailable</h2>
+  <h2>😖 Something went wrong</h2>
   <p id="maintenanceMsg">We're doing a bit of upkeep — check back soon!</p>
 </div>
 
@@ -321,14 +321,14 @@
         <div class="section-sub" id="liveSub">Waiting for the current run...</div>
       </div>
     </div>
-    <div class="progress-shell">
+    <div class="progress-shell" id="progressShell">
       <div class="run-graphic" id="runGraphic">
         <div class="candle" id="graphicCandle">
           <div class="flame" id="flame"></div>
           <div class="candle-fill planned" id="candleFill" style="height:0%"></div>
           <div class="candle-fill live" id="realtimeCandleFill" style="height:0%"></div>
         </div>
-        <div class="image-fill" id="graphicEden" style="display:none; aspect-ratio: 360 / 360;">
+        <div class="image-fill" id="graphicEden" style="display:none; aspect-ratio: 173 / 305;">
           <img class="image-fill-bg" src="assets/eden-candle.png" alt="">
           <img class="image-fill-fg" id="edenFillPlanned" src="assets/eden-candle.png" alt="" style="clip-path: inset(100% 50% 0 0);">
           <img class="image-fill-fg live" id="edenFillLive" src="assets/eden-candle.png" alt="" style="clip-path: inset(100% 0 0 50%);">
@@ -361,25 +361,7 @@
   <div class="modal-box">
     <h3>Before you apply...</h3>
 
-    <div class="rules-section">
-      <h4>🤝 Rules</h4>
-      <ul>
-        <li>⚠️ Sky Kids whose Discord accounts are created before <span id="discordCutoffDate">—</span> are allowed.</li>
-        <li>⚠️ Set Aviary as home.</li>
-        <li>📌 Auto-Hand. Refrain from releasing hands unless we are doing daily quest, meditating, or interacting with some objects.</li>
-        <li>📌 Please try to teleport back if we get split. If you can't join me even with a minute, please directly reach me out with Discord Direct Message.</li>
-      </ul>
-    </div>
-
-    <div class="rules-section">
-      <h4>🔍 Note!</h4>
-      <ul>
-        <li>🤠 Once you're done interacting with any interact-ables, I'd appreciate it if you honk after interact!!!</li>
-        <li>⛺ I'll use tent glitched Shared Memory, but sometimes I can't see those Shared Memories. You can release our hands and lead me up to teleport if you can see Shared Memories first.</li>
-        <li>👥 No extra sky kids from your constellation allowed. I don't mind if your friend joins us suddenly, but I won't wait around for your friends to move areas. But, my alternative account may be joining us as well.(?!)</li>
-        <li>🔇 Preferred Quiet Run. Because my English is pretty bad, so I want to avoid chatting for more focusing on collecting our wax! You can chat if you have any inquiries, of course.</li>
-      </ul>
-    </div>
+    <div id="rulesContent"></div>
 
     <div class="modal-actions">
       <button type="button" class="btn-cancel" id="rulesCancelBtn">Cancel</button>
@@ -395,7 +377,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, doc, setDoc, onSnapshot, collection, query, orderBy, runTransaction, serverTimestamp
+    getFirestore, doc, onSnapshot, collection, query, orderBy, runTransaction, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // ====== 1) PASTE YOUR FIREBASE CONFIG HERE (same object for index.html and admin.html) ======
@@ -413,11 +395,14 @@
   const db = getFirestore(app);
 
   // ---------- Maintenance mode (checked first — covers everything else while on) ----------
+  // Local copies (file:// or localhost) always bypass this, so you can keep
+  // testing on your machine while the deployed GitHub Pages site is hidden.
+  const isLocal = location.protocol === 'file:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
   const maintenanceScreenEl = document.getElementById('maintenanceScreen');
   const maintenanceMsgEl = document.getElementById('maintenanceMsg');
   onSnapshot(doc(db, 'meta', 'maintenance'), (snap) => {
     const data = snap.exists() ? snap.data() : { enabled: false };
-    if(data.enabled){
+    if(data.enabled && !isLocal){
       maintenanceMsgEl.textContent = data.message || "We're doing a bit of upkeep — check back soon!";
       maintenanceScreenEl.style.display = 'flex';
     } else {
@@ -516,6 +501,8 @@
 
   // ---------- Render the live run ----------
   const timelineEl = document.getElementById('timeline');
+  const progressShellEl = document.getElementById('progressShell');
+  const candleFillEl = document.getElementById('candleFill');
   const realtimeCandleFillEl = document.getElementById('realtimeCandleFill');
   const announcementsEl = document.getElementById('announcements');
   const liveSubEl = document.getElementById('liveSub');
@@ -538,7 +525,7 @@
   // measured from the (possibly already-resized) element itself. Measuring
   // the box's own rendered size to decide its next size caused a feedback
   // loop that made it flicker larger/smaller on every re-render.
-  const GRAPHIC_ASPECT = { eden: 360 / 360, wingLight: 435 / 1100 };
+  const GRAPHIC_ASPECT = { eden: 173 / 305, wingLight: 435 / 1100 };
   const GRAPHIC_ASSET = { eden: 'eden-candle', wingLight: 'wing-light' };
   const GRAPHIC_MAX_W = 240;
 
@@ -582,11 +569,12 @@
 
   function renderLiveRun(){
     if(!liveRunData){
+      progressShellEl.style.display = 'none';
       timelineEl.innerHTML = '';
       liveSubEl.textContent = 'No active run.';
       statusTextEl.textContent = 'No Run is currently active.';
       statusPillEl.className = 'status-pill none';
-      document.getElementById('candleFill').style.height = '0%';
+      candleFillEl.style.height = '0%';
       realtimeCandleFillEl.style.height = '0%';
       realtimeCandleFillEl.className = 'candle-fill live';
       setRunGraphic('candle', 0, 0, '');
@@ -622,7 +610,7 @@
     });
 
     const pct = timetable.length ? Math.round(((currentIdx+1) / timetable.length) * 100) : 0;
-    document.getElementById('candleFill').style.height = pct + '%';
+    candleFillEl.style.height = pct + '%';
 
     // Real-time candle + status badge: both driven by the admin's Report field,
     // colored by the most recently logged delay.
@@ -635,9 +623,11 @@
     setRunGraphic(runType, pct, reportPct, reportCls);
 
     if(currentIdx === -1){
+      progressShellEl.style.display = 'none';
       statusTextEl.textContent = 'No Run is currently active.';
       statusPillEl.className = 'status-pill none';
     } else {
+      progressShellEl.style.display = '';
       statusTextEl.textContent = reportStatusText(lastReport);
       statusPillEl.className = `status-pill ${reportCls}`.trim();
     }
@@ -714,38 +704,48 @@
     }).join('');
   }
 
-  // ⚠️ Discord account cutoff shown in the rules popup: 3 months before the
-  // most recently created run's date, so it drifts forward automatically as
-  // new runs get added.
-  function updateDiscordCutoff(){
-    const cutoffEl = document.getElementById('discordCutoffDate');
-    if(!cutoffEl) return;
-    const latest = allRuns[0];
-    if(!latest || !latest.data || !latest.data.date){ cutoffEl.textContent = '—'; return; }
-    const [y, m, d] = latest.data.date.split('-').map(Number);
-    const cutoff = new Date(y, m - 1, d);
-    cutoff.setMonth(cutoff.getMonth() - 3);
-    cutoffEl.textContent = cutoff.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-  }
-
   onSnapshot(query(collection(db, 'runs'), orderBy('date', 'desc')), (snap) => {
     allRuns = snap.docs.map(d => ({ id: d.id, data: d.data() }));
     renderArchive();
-    updateDiscordCutoff();
     markLoadedOnce('runs');
   });
 
-  // ---------- Presence heartbeat (lets the admin page see how many people are viewing) ----------
-  let visitorId = sessionStorage.getItem('skyrunVisitorId');
-  if(!visitorId){
-    visitorId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    sessionStorage.setItem('skyrunVisitorId', visitorId);
+  // ---------- Apply rules popup content (editable from admin) ----------
+  const rulesContentEl = document.getElementById('rulesContent');
+  const DEFAULT_APPLY_RULES = [
+    {
+      title: '🤝 Rules',
+      items: [
+        '⚠️ Set Aviary as home.',
+        '📌 Auto-Hand. Refrain from releasing hands unless we are doing daily quest, meditating, or interacting with some objects.',
+        "📌 Please try to teleport back if we get split. If you can't join me even with a minute, please directly reach me out with Discord Direct Message.",
+      ],
+    },
+    {
+      title: '🔍 Note!',
+      items: [
+        "🤠 Once you're done interacting with any interact-ables, I'd appreciate it if you honk after interact!!!",
+        "⛺ I'll use tent glitched Shared Memory, but sometimes I can't see those Shared Memories. You can release our hands and lead me up to teleport if you can see Shared Memories first.",
+        "👥 No extra sky kids from your constellation allowed. I don't mind if your friend joins us suddenly, but I won't wait around for your friends to move areas. But, my alternative account may be joining us as well.(?!)",
+        "🔇 Preferred Quiet Run. Because my English is pretty bad, so I want to avoid chatting for more focusing on collecting our wax! You can chat if you have any inquiries, of course.",
+      ],
+    },
+  ];
+  let applyRulesConfig = DEFAULT_APPLY_RULES;
+
+  function renderApplyRules(){
+    rulesContentEl.innerHTML = applyRulesConfig.map(section => `
+      <div class="rules-section">
+        <h4>${section.title}</h4>
+        <ul>${(section.items || []).map(item => `<li>${item}</li>`).join('')}</ul>
+      </div>
+    `).join('');
   }
-  function sendHeartbeat(){
-    setDoc(doc(db, 'presence', visitorId), { lastSeen: serverTimestamp() }).catch(() => {});
-  }
-  sendHeartbeat();
-  setInterval(sendHeartbeat, 20000);
+
+  onSnapshot(doc(db, 'meta', 'applyRules'), (snap) => {
+    applyRulesConfig = snap.exists() && Array.isArray(snap.data().sections) ? snap.data().sections : DEFAULT_APPLY_RULES;
+    renderApplyRules();
+  });
 
   // ---------- Apply to join ----------
   const applySectionEl = document.getElementById('apply');

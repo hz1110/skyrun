@@ -10,7 +10,7 @@
 
   :root{
     --sky-dusk:#1b1b3a; --sky-deep:#100f24; --sky-mid:#2c2a55;
-    --candle-gold:#ffc978; --candle-ember:#f4a340; --aurora-lavender:#b98bd9;
+    --candle-gold:#ffc978;
     --cloud-white:#f5f3ff; --muted-teal:#5ec9c0; --soft-rose:#e98074;
     --line: rgba(245,243,255,0.14);
   }
@@ -86,15 +86,6 @@
     </div>
 
     <div class="card">
-      <div class="hint" style="margin-top:0;">Live visitors on the site right now:</div>
-      <div style="display:flex; align-items:flex-end; gap:16px;">
-        <div id="liveVisitorCount" class="mono" style="font-size:22px; font-weight:700; color: var(--candle-gold);">—</div>
-        <svg id="visitorSparkline" viewBox="0 0 240 40" style="flex:1; height:40px; min-width:120px;" preserveAspectRatio="none"></svg>
-      </div>
-      <div class="hint" style="margin-top:8px; margin-bottom:0;">Trend over the last 5 minutes (updates every 5s while this page is open).</div>
-    </div>
-
-    <div class="card">
       <label>Load an existing run, or type a new date (YYYY-MM-DD) to create one</label>
       <select id="runSelect"><option value="">— New run —</option></select>
       <label>Run date (used as the run's ID and its KST anchor date)</label>
@@ -136,6 +127,31 @@
   "📌 Don't forget to claim your Daily Quest rewards!"
 ]</textarea>
       <button class="btn-primary" id="saveAnnouncementsBtn">Save Announcements</button>
+    </div>
+
+    <div class="card">
+      <label>"Before you apply..." popup (JSON array of sections — shown when someone hits Submit on the Apply form)</label>
+      <div class="hint">Each section: { "title": "🤝 Rules", "items": ["line 1", "line 2"] }.</div>
+      <textarea id="applyRulesInput" style="min-height:220px;">[
+  {
+    "title": "🤝 Rules",
+    "items": [
+      "⚠️ Set Aviary as home.",
+      "📌 Auto-Hand. Refrain from releasing hands unless we are doing daily quest, meditating, or interacting with some objects.",
+      "📌 Please try to teleport back if we get split. If you can't join me even with a minute, please directly reach me out with Discord Direct Message."
+    ]
+  },
+  {
+    "title": "🔍 Note!",
+    "items": [
+      "🤠 Once you're done interacting with any interact-ables, I'd appreciate it if you honk after interact!!!",
+      "⛺ I'll use tent glitched Shared Memory, but sometimes I can't see those Shared Memories. You can release our hands and lead me up to teleport if you can see Shared Memories first.",
+      "👥 No extra sky kids from your constellation allowed. I don't mind if your friend joins us suddenly, but I won't wait around for your friends to move areas. But, my alternative account may be joining us as well.(?!)",
+      "🔇 Preferred Quiet Run. Because my English is pretty bad, so I want to avoid chatting for more focusing on collecting our wax! You can chat if you have any inquiries, of course."
+    ]
+  }
+]</textarea>
+      <button class="btn-primary" id="saveApplyRulesBtn">Save Apply Rules</button>
     </div>
 
     <div class="card">
@@ -205,10 +221,10 @@
       loadRunList();
       loadCurrentLive();
       loadGlobalAnnouncements();
+      loadApplyRules();
       loadApplyConfig();
       loadMaintenanceConfig();
       subscribeApplicants();
-      subscribePresence();
     } else {
       loginBox.style.display = 'block';
       hidden.style.display = 'none';
@@ -222,6 +238,7 @@
   const timetableInput = document.getElementById('timetableInput');
   const reportInput = document.getElementById('reportInput');
   const globalAnnouncementsInput = document.getElementById('globalAnnouncementsInput');
+  const applyRulesInput = document.getElementById('applyRulesInput');
   const maintenanceEnabledInput = document.getElementById('maintenanceEnabledInput');
   const maintenanceMsgInput = document.getElementById('maintenanceMsgInput');
   const applyEnabledInput = document.getElementById('applyEnabledInput');
@@ -271,6 +288,13 @@
   async function loadGlobalAnnouncements(){
     const snap = await getDoc(doc(db, 'meta', 'announcements'));
     globalAnnouncementsInput.value = JSON.stringify(snap.exists() ? (snap.data().items || []) : [], null, 2);
+  }
+
+  async function loadApplyRules(){
+    const snap = await getDoc(doc(db, 'meta', 'applyRules'));
+    if(snap.exists() && Array.isArray(snap.data().sections)){
+      applyRulesInput.value = JSON.stringify(snap.data().sections, null, 2);
+    }
   }
 
   async function loadApplyConfig(){
@@ -326,62 +350,6 @@
     }
   });
 
-  // ---------- Live visitor count (based on heartbeat docs the site writes every 20s) ----------
-  const liveVisitorCountEl = document.getElementById('liveVisitorCount');
-  const visitorSparklineEl = document.getElementById('visitorSparkline');
-  let presenceDocs = [];
-  let visitorHistory = []; // last ~5 minutes of {t, n} samples, kept in memory for this admin session
-
-  function renderVisitorSparkline(){
-    if(visitorHistory.length < 2){ visitorSparklineEl.innerHTML = ''; return; }
-    const w = 240, h = 40, pad = 4;
-    const maxN = Math.max(1, ...visitorHistory.map(p => p.n));
-    const step = (w - pad * 2) / (visitorHistory.length - 1);
-    const points = visitorHistory.map((p, i) => {
-      const x = pad + i * step;
-      const y = h - pad - (p.n / maxN) * (h - pad * 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-    visitorSparklineEl.innerHTML = `
-      <polyline points="${points}" fill="none" stroke="var(--candle-gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    `;
-  }
-
-  function recomputeLiveCount(){
-    const now = Date.now();
-    const online = presenceDocs.filter(p => {
-      const ls = p.lastSeen;
-      if(!ls || !ls.toDate) return false;
-      return (now - ls.toDate().getTime()) < 45000; // missed at most 1 heartbeat (20s) + buffer
-    });
-    liveVisitorCountEl.textContent = `${online.length} 🟢`;
-
-    visitorHistory.push({ t: now, n: online.length });
-    const cutoff = now - 5 * 60000;
-    visitorHistory = visitorHistory.filter(p => p.t >= cutoff);
-    renderVisitorSparkline();
-  }
-
-  async function cleanupStalePresence(){
-    const snap = await getDocs(collection(db, 'presence'));
-    const now = Date.now();
-    const stale = snap.docs.filter(d => {
-      const ls = d.data().lastSeen;
-      return !ls || !ls.toDate || (now - ls.toDate().getTime()) > 10 * 60000; // 10+ min old
-    });
-    await Promise.all(stale.map(d => deleteDoc(d.ref)));
-  }
-
-  function subscribePresence(){
-    onSnapshot(collection(db, 'presence'), (snap) => {
-      presenceDocs = snap.docs.map(d => d.data());
-      recomputeLiveCount();
-    });
-    setInterval(recomputeLiveCount, 5000);
-    cleanupStalePresence();
-    setInterval(cleanupStalePresence, 5 * 60000);
-  }
-
   runSelect.onchange = async () => {
     const id = runSelect.value;
     if(!id){
@@ -432,6 +400,16 @@
       const items = parseJsonField(globalAnnouncementsInput, 'Announcements');
       await setDoc(doc(db, 'meta', 'announcements'), { items });
       showOk('Saved announcements.');
+    }catch(e){
+      showErr(e.message);
+    }
+  };
+
+  document.getElementById('saveApplyRulesBtn').onclick = async () => {
+    try{
+      const sections = parseJsonField(applyRulesInput, 'Apply Rules');
+      await setDoc(doc(db, 'meta', 'applyRules'), { sections });
+      showOk('Saved apply rules.');
     }catch(e){
       showErr(e.message);
     }
