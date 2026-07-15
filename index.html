@@ -475,11 +475,11 @@
   const loadFlags = { current: false, applications: false, runs: false, liveRun: false };
   let liveRunNeeded = false;
   let loadingHidden = false;
+  let loadFailed = false; // once the failsafe fires, stay blocked until a manual reload
 
   function hideLoadingScreen(){
-    if(loadingHidden) return;
+    if(loadingHidden || loadFailed) return;
     loadingHidden = true;
-    loadErrorScreenEl.style.display = 'none'; // in case it loaded successfully right after the failsafe fired
     loadingScreenEl.classList.add('hide');
     setTimeout(() => { loadingScreenEl.style.display = 'none'; }, 650);
   }
@@ -493,10 +493,14 @@
     loadFlags[key] = true;
     checkAllLoaded();
   }
-  // If loading never finishes (e.g. Firestore unreachable), block the site
-  // with an explicit error instead of silently revealing a half-loaded page.
+  // If loading never finishes (e.g. Firestore unreachable), block the site with
+  // an explicit error instead of silently revealing a half-loaded page — and
+  // keep it blocked even if a late/stray response trickles in afterwards.
   setTimeout(() => {
-    if(!loadingHidden) loadErrorScreenEl.style.display = 'flex';
+    if(!loadingHidden){
+      loadFailed = true;
+      loadErrorScreenEl.style.display = 'flex';
+    }
   }, 8000);
 
   // ---------- Background stars ----------
