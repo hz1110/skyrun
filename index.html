@@ -424,7 +424,7 @@
 
     <div class="modal-actions">
       <button type="button" class="btn-cancel" id="rulesCancelBtn">Cancel</button>
-      <button type="button" class="apply-btn" id="rulesAgreeBtn">Submit</button>
+      <button type="button" class="apply-btn" id="rulesAgreeBtn">Next</button>
     </div>
   </div>
 </div>
@@ -754,13 +754,23 @@
   const progressNavEl = document.getElementById('progressNav');
   const progressDotsEl = document.getElementById('progressDots');
 
+  // Earliest scheduled clock time for a run — used so same-day runs of different types
+  // still sort by actual start time instead of tying on the date string alone. Runs with
+  // no timetable/report entries yet have no real start time, so they sort last.
+  function runSortTime(r){
+    const firstTime = (r.data.timetable && r.data.timetable[0] && r.data.timetable[0].time)
+      || (r.data.report && r.data.report[0] && r.data.report[0].time);
+    if(!firstTime) return Infinity;
+    return pstToDate(r.data.date || r.id, firstTime).getTime();
+  }
+
   // Live run first (if any), then every other run dated today or later, soonest first.
   function getCarouselRuns(){
     const today = todayPST();
     const live = activeRunId ? allRuns.find(r => r.id === activeRunId) : null;
     const upcoming = allRuns
       .filter(r => r.id !== activeRunId && !r.data.ended && (r.data.date || '') >= today)
-      .sort((a, b) => (a.data.date || '').localeCompare(b.data.date || ''));
+      .sort((a, b) => runSortTime(a) - runSortTime(b));
     return live ? [live, ...upcoming] : upcoming;
   }
 
@@ -921,17 +931,19 @@
   const applyModalEl = document.getElementById('applyModal');
   const applyModalTitleEl = document.getElementById('applyModalTitle');
   const applyModalBodyEl = document.getElementById('applyModalBody');
+  const rulesModalEl = document.getElementById('rulesModal');
 
+  // Step 1: "Before you apply..." rules. Step 2 (openApplyForm): the actual input form.
   function openApplyModal(){
     if(!currentCarouselRun) return;
     const { id, data } = currentCarouselRun;
-    applyModalTitleEl.textContent = `Apply to Join for ${runTypeLabel(data.runType)} · ${formatGameDate(data.date || id)}`;
     const cfg = runApplyConfigs[id] || {};
     const maxSlots = Number(cfg.maxSlots) || 0;
     const count = Number(cfg.count) || 0;
     const remaining = maxSlots - count;
 
     if(remaining <= 0){
+      applyModalTitleEl.textContent = `Apply to Join for ${runTypeLabel(data.runType)} · ${formatGameDate(data.date || id)}`;
       applyModalBodyEl.innerHTML = `
         <div class="apply-closed">Applications are closed for now.<br>The roster isn't finalized until this button is removed! Please wait for applications to reopen!</div>
         <div class="modal-actions">
@@ -943,6 +955,15 @@
       return;
     }
 
+    renderApplyRules(cfg.rules);
+    rulesModalEl.style.display = 'flex';
+  }
+  applyOpenBtnEl.onclick = openApplyModal;
+
+  function openApplyForm(){
+    if(!currentCarouselRun) return;
+    const { id, data } = currentCarouselRun;
+    applyModalTitleEl.textContent = `Apply to Join for ${runTypeLabel(data.runType)} · ${formatGameDate(data.date || id)}`;
     applyModalBodyEl.innerHTML = `
       <form class="apply-form" id="applyForm">
         <div>
@@ -978,28 +999,13 @@
     document.getElementById('applyForm').addEventListener('submit', onApplyFormSubmit);
     applyModalEl.style.display = 'flex';
   }
-  applyOpenBtnEl.onclick = openApplyModal;
-
-  let pendingApplication = null;
-  const rulesModalEl = document.getElementById('rulesModal');
-
-  function onApplyFormSubmit(e){
-    e.preventDefault();
-    if(!currentCarouselRun) return;
-    const discord = document.getElementById('discordInput').value.trim();
-    const nickname = document.getElementById('nicknameInput').value.trim();
-    const friendCode = document.getElementById('friendCodeInput').value.trim();
-    const alreadyFriends = document.getElementById('alreadyFriendsInput').checked;
-    if(!discord || !nickname || (!friendCode && !alreadyFriends)) return;
-
-    pendingApplication = { runId: currentCarouselRun.id, discord, nickname, friendCode, alreadyFriends };
-    renderApplyRules((runApplyConfigs[currentCarouselRun.id] || {}).rules);
-    rulesModalEl.style.display = 'flex';
-  }
 
   document.getElementById('rulesCancelBtn').onclick = () => {
     rulesModalEl.style.display = 'none';
-    pendingApplication = null;
+  };
+  document.getElementById('rulesAgreeBtn').onclick = () => {
+    rulesModalEl.style.display = 'none';
+    openApplyForm();
   };
 
   const submitStatusModalEl = document.getElementById('submitStatusModal');
@@ -1013,12 +1019,17 @@
     if(e.target.id === 'statusCloseBtn') submitStatusModalEl.style.display = 'none';
   });
 
-  document.getElementById('rulesAgreeBtn').onclick = async () => {
-    if(!pendingApplication) return;
-    const { runId, discord, nickname, friendCode, alreadyFriends } = pendingApplication;
-    rulesModalEl.style.display = 'none';
+  async function onApplyFormSubmit(e){
+    e.preventDefault();
+    if(!currentCarouselRun) return;
+    const discord = document.getElementById('discordInput').value.trim();
+    const nickname = document.getElementById('nicknameInput').value.trim();
+    const friendCode = document.getElementById('friendCodeInput').value.trim();
+    const alreadyFriends = document.getElementById('alreadyFriendsInput').checked;
+    if(!discord || !nickname || (!friendCode && !alreadyFriends)) return;
+
+    const runId = currentCarouselRun.id;
     applyModalEl.style.display = 'none';
-    pendingApplication = null;
 
     showSubmitStatus(`
       <div class="loading-flame" style="margin:0 auto 16px;"></div>
@@ -1051,7 +1062,7 @@
         <button type="button" class="apply-btn" id="statusCloseBtn" style="width:100%;">Close</button>
       `);
     }
-  };
+  }
 
   onSnapshot(collection(db, 'runApplications'), (snap) => {
     runApplyConfigs = {};
