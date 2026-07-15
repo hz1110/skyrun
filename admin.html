@@ -88,7 +88,7 @@
     <div class="card">
       <label>Load an existing run, or type a new date (YYYY-MM-DD) to create one</label>
       <select id="runSelect"><option value="">— New run —</option></select>
-      <label>Run date (used as the run's ID and its KST anchor date)</label>
+      <label>Run date (used as the run's ID and its Pacific Time/PST anchor date)</label>
       <input id="runDate" type="text" placeholder="2026-07-13">
 
       <label>Run Type — controls which graphic shows in the Live section</label>
@@ -99,6 +99,7 @@
       </select>
 
       <label>Timetable (JSON array — planned schedule, shown in Live section)</label>
+      <div class="hint">"time" values are Pacific Time (PST/PDT, the game's own timezone), anchored to the run date above.</div>
       <textarea id="timetableInput">[
   { "time": "15:53", "label": "We all need to stay together!", "afk": true },
   { "time": "15:55", "label": "Fire Trial", "afk": false }
@@ -109,30 +110,24 @@
   { "time": "15:53", "label": "Fire Trial", "delay": "minus", "minutes": 2, "delayLabel": "-2 mins" }
 ]</textarea>
 
-      <button class="btn-primary" id="saveBtn">Save Run</button>
-      <button class="btn-secondary" id="setLiveBtn">Set as Live Run</button>
-      <button class="btn-secondary" id="endLiveBtn">End Run (Move to Archive)</button>
-      <button class="btn-danger" id="deleteBtn">Delete Run</button>
-    </div>
-
-    <div class="card">
-      <div class="hint" style="margin-top:0;">Currently live run:</div>
-      <div id="currentLiveDisplay" class="mono" style="font-size:14px;">—</div>
-    </div>
-
-    <div class="card">
-      <label>Announcements (JSON array of strings — always shown on the site, independent of any run; HTML like &lt;a&gt; is allowed)</label>
-      <div class="hint">Insert a live countdown with {{t:HH:MM}} (KST, anchored to today's date) — e.g. "Fire Trial starts {{t:15:55}}" renders as "in 12m" that auto-updates.</div>
-      <textarea id="globalAnnouncementsInput">[
+      <label>Announcements for this Run (JSON array of strings — shown while this run is live/upcoming; HTML like &lt;a&gt; is allowed)</label>
+      <div class="hint">Insert a live countdown with {{t:HH:MM}} (Pacific Time, anchored to this run's date) — e.g. "Fire Trial starts {{t:15:55}}" renders as "in 12m" that auto-updates.</div>
+      <textarea id="runAnnouncementsInput">[
   "📌 Don't forget to claim your Daily Quest rewards!"
 ]</textarea>
-      <button class="btn-primary" id="saveAnnouncementsBtn">Save Announcements</button>
-    </div>
 
-    <div class="card">
-      <label>"Before you apply..." popup (JSON array of sections — shown when someone hits Submit on the Apply form)</label>
+      <label>Accepting Applications for this Run — shows an "📝 Apply to Join" button next to this run on the site</label>
+      <select id="runApplyEnabledInput">
+        <option value="false">Off</option>
+        <option value="true">On</option>
+      </select>
+      <label>Max Slots</label>
+      <input id="runApplyMaxInput" type="number" min="0" step="1" value="0">
+      <div class="hint" id="runApplyCountHint">Current applicants: 0 / 0</div>
+
+      <label>"Before you apply..." popup for this run (JSON array of sections)</label>
       <div class="hint">Each section: { "title": "🤝 Rules", "items": ["line 1", "line 2"] }.</div>
-      <textarea id="applyRulesInput" style="min-height:220px;">[
+      <textarea id="runApplyRulesInput" style="min-height:180px;">[
   {
     "title": "🤝 Rules",
     "items": [
@@ -151,24 +146,21 @@
     ]
   }
 ]</textarea>
-      <button class="btn-primary" id="saveApplyRulesBtn">Save Apply Rules</button>
+
+      <button class="btn-primary" id="saveBtn">Save Run</button>
+      <button class="btn-secondary" id="setLiveBtn">Set as Live Run</button>
+      <button class="btn-secondary" id="endLiveBtn">End Run (Move to Archive)</button>
+      <button class="btn-danger" id="resetRunApplyBtn">Reset Applications for this Run</button>
+      <button class="btn-danger" id="deleteBtn">Delete Run</button>
     </div>
 
     <div class="card">
-      <label>Accepting Applications</label>
-      <select id="applyEnabledInput">
-        <option value="false">Off</option>
-        <option value="true">On</option>
-      </select>
-      <label>Max Slots</label>
-      <input id="applyMaxInput" type="number" min="0" step="1" value="0">
-      <div class="hint" id="applyCountHint">Current applicants: 0 / 0</div>
-      <button class="btn-primary" id="saveApplyBtn">Save Application Settings</button>
-      <button class="btn-danger" id="resetApplyBtn">Reset Applications (clears all applicants)</button>
+      <div class="hint" style="margin-top:0;">Currently live run:</div>
+      <div id="currentLiveDisplay" class="mono" style="font-size:14px;">—</div>
     </div>
 
     <div class="card">
-      <div class="hint" style="margin-top:0;">Applicants</div>
+      <div class="hint" style="margin-top:0;">Applicants (all runs)</div>
       <div id="applicantList">Loading...</div>
     </div>
   </div>
@@ -180,7 +172,7 @@
     getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import {
-    getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, orderBy, query
+    getFirestore, doc, setDoc, getDoc, deleteDoc, collection, getDocs, onSnapshot, orderBy, query, where
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   // ====== PASTE THE SAME FIREBASE CONFIG AS index.html ======
@@ -220,9 +212,6 @@
       hidden.style.display = 'block';
       loadRunList();
       loadCurrentLive();
-      loadGlobalAnnouncements();
-      loadApplyRules();
-      loadApplyConfig();
       loadMaintenanceConfig();
       subscribeApplicants();
     } else {
@@ -237,13 +226,13 @@
   const runTypeInput = document.getElementById('runTypeInput');
   const timetableInput = document.getElementById('timetableInput');
   const reportInput = document.getElementById('reportInput');
-  const globalAnnouncementsInput = document.getElementById('globalAnnouncementsInput');
-  const applyRulesInput = document.getElementById('applyRulesInput');
+  const runAnnouncementsInput = document.getElementById('runAnnouncementsInput');
   const maintenanceEnabledInput = document.getElementById('maintenanceEnabledInput');
   const maintenanceMsgInput = document.getElementById('maintenanceMsgInput');
-  const applyEnabledInput = document.getElementById('applyEnabledInput');
-  const applyMaxInput = document.getElementById('applyMaxInput');
-  const applyCountHint = document.getElementById('applyCountHint');
+  const runApplyEnabledInput = document.getElementById('runApplyEnabledInput');
+  const runApplyMaxInput = document.getElementById('runApplyMaxInput');
+  const runApplyCountHint = document.getElementById('runApplyCountHint');
+  const runApplyRulesInput = document.getElementById('runApplyRulesInput');
   const applicantListEl = document.getElementById('applicantList');
   const saveMsg = document.getElementById('saveMsg');
   const errMsg = document.getElementById('errMsg');
@@ -285,24 +274,42 @@
       : activeRunId;
   }
 
-  async function loadGlobalAnnouncements(){
-    const snap = await getDoc(doc(db, 'meta', 'announcements'));
-    globalAnnouncementsInput.value = JSON.stringify(snap.exists() ? (snap.data().items || []) : [], null, 2);
-  }
+  const DEFAULT_RUN_APPLY_RULES = [
+    {
+      title: '🤝 Rules',
+      items: [
+        '⚠️ Set Aviary as home.',
+        '📌 Auto-Hand. Refrain from releasing hands unless we are doing daily quest, meditating, or interacting with some objects.',
+        "📌 Please try to teleport back if we get split. If you can't join me even with a minute, please directly reach me out with Discord Direct Message.",
+      ],
+    },
+    {
+      title: '🔍 Note!',
+      items: [
+        "🤠 Once you're done interacting with any interact-ables, I'd appreciate it if you honk after interact!!!",
+        "⛺ I'll use tent glitched Shared Memory, but sometimes I can't see those Shared Memories. You can release our hands and lead me up to teleport if you can see Shared Memories first.",
+        "👥 No extra sky kids from your constellation allowed. I don't mind if your friend joins us suddenly, but I won't wait around for your friends to move areas. But, my alternative account may be joining us as well.(?!)",
+        "🔇 Preferred Quiet Run. Because my English is pretty bad, so I want to avoid chatting for more focusing on collecting our wax! You can chat if you have any inquiries, of course.",
+      ],
+    },
+  ];
 
-  async function loadApplyRules(){
-    const snap = await getDoc(doc(db, 'meta', 'applyRules'));
-    if(snap.exists() && Array.isArray(snap.data().sections)){
-      applyRulesInput.value = JSON.stringify(snap.data().sections, null, 2);
+  // Loads the per-run application settings (Accepting Applications / Max Slots /
+  // rules popup) into the form. Pass no id (new run) to reset to defaults.
+  async function loadRunApplyConfig(runId){
+    if(!runId){
+      runApplyEnabledInput.value = 'false';
+      runApplyMaxInput.value = '0';
+      runApplyRulesInput.value = JSON.stringify(DEFAULT_RUN_APPLY_RULES, null, 2);
+      runApplyCountHint.textContent = 'Current applicants: 0 / 0';
+      return;
     }
-  }
-
-  async function loadApplyConfig(){
-    const snap = await getDoc(doc(db, 'meta', 'applications'));
-    const data = snap.exists() ? snap.data() : { enabled: false, maxSlots: 0, count: 0 };
-    applyEnabledInput.value = String(!!data.enabled);
-    applyMaxInput.value = data.maxSlots ?? 0;
-    applyCountHint.textContent = `Current applicants: ${data.count ?? 0} / ${data.maxSlots ?? 0}`;
+    const snap = await getDoc(doc(db, 'runApplications', runId));
+    const data = snap.exists() ? snap.data() : { enabled: false, maxSlots: 0, count: 0, rules: DEFAULT_RUN_APPLY_RULES };
+    runApplyEnabledInput.value = String(!!data.enabled);
+    runApplyMaxInput.value = data.maxSlots ?? 0;
+    runApplyRulesInput.value = JSON.stringify(Array.isArray(data.rules) ? data.rules : DEFAULT_RUN_APPLY_RULES, null, 2);
+    runApplyCountHint.textContent = `Current applicants: ${data.count ?? 0} / ${data.maxSlots ?? 0}`;
   }
 
   async function loadMaintenanceConfig(){
@@ -326,8 +333,8 @@
             <div class="d">${a.discord || '—'}</div>
             <div>Sky nickname: ${a.nickname || '—'}</div>
             <div>Friend code: ${a.alreadyFriends ? "Already friends" : (a.friendCode || '—')}</div>
-            <div class="meta">${when}</div>
-            <button class="btn-danger" data-id="${d.id}" style="margin-top:8px; padding:6px 12px; font-size:12.5px;">Delete</button>
+            <div class="meta">Run: ${a.runId || 'Legacy (no run)'} · ${when}</div>
+            <button class="btn-danger" data-id="${d.id}" data-run-id="${a.runId || ''}" style="margin-top:8px; padding:6px 12px; font-size:12.5px;">Delete</button>
           </div>
         `;
       }).join('');
@@ -340,11 +347,14 @@
     if(!confirm('Delete this applicant?')) return;
     try{
       await deleteDoc(doc(db, 'applications', btn.dataset.id));
-      const metaSnap = await getDoc(doc(db, 'meta', 'applications'));
-      const count = metaSnap.exists() ? (Number(metaSnap.data().count) || 0) : 0;
-      await setDoc(doc(db, 'meta', 'applications'), { count: Math.max(0, count - 1) }, { merge: true });
+      const runId = btn.dataset.runId;
+      if(runId){
+        const applySnap = await getDoc(doc(db, 'runApplications', runId));
+        const count = applySnap.exists() ? (Number(applySnap.data().count) || 0) : 0;
+        await setDoc(doc(db, 'runApplications', runId), { count: Math.max(0, count - 1) }, { merge: true });
+        if(runSelect.value === runId) loadRunApplyConfig(runId);
+      }
       showOk('Applicant deleted.');
-      loadApplyConfig();
     }catch(err){
       showErr(err.message);
     }
@@ -357,6 +367,8 @@
       runTypeInput.value = 'candle';
       timetableInput.value = '[]';
       reportInput.value = '[]';
+      runAnnouncementsInput.value = '[]';
+      loadRunApplyConfig(null);
       return;
     }
     const snap = await getDoc(doc(db, 'runs', id));
@@ -366,7 +378,9 @@
       runTypeInput.value = data.runType || 'candle';
       timetableInput.value = JSON.stringify(data.timetable || [], null, 2);
       reportInput.value = JSON.stringify(data.report || [], null, 2);
+      runAnnouncementsInput.value = JSON.stringify(data.announcements || [], null, 2);
     }
+    loadRunApplyConfig(id);
   };
 
   function parseJsonField(el, name){
@@ -385,31 +399,22 @@
       const runId = makeRunId(runDate, runType);
       const timetable = parseJsonField(timetableInput, 'Timetable');
       const report = parseJsonField(reportInput, 'Report');
+      const announcements = parseJsonField(runAnnouncementsInput, 'Announcements');
+      const applyEnabled = runApplyEnabledInput.value === 'true';
+      const applyMaxSlots = parseInt(runApplyMaxInput.value, 10) || 0;
+      const applyRules = parseJsonField(runApplyRulesInput, 'Apply Rules');
 
-      await setDoc(doc(db, 'runs', runId), { date: runDate, runType, timetable, report });
+      await setDoc(doc(db, 'runs', runId), { date: runDate, runType, timetable, report, announcements });
+
+      const existingApply = await getDoc(doc(db, 'runApplications', runId));
+      const applyPayload = { enabled: applyEnabled, maxSlots: applyMaxSlots, rules: applyRules };
+      if(!existingApply.exists()) applyPayload.count = 0;
+      await setDoc(doc(db, 'runApplications', runId), applyPayload, { merge: true });
+
       showOk(`Saved ${runTypeLabel(runType)} for ${runDate}.`);
       await loadRunList();
       runSelect.value = runId;
-    }catch(e){
-      showErr(e.message);
-    }
-  };
-
-  document.getElementById('saveAnnouncementsBtn').onclick = async () => {
-    try{
-      const items = parseJsonField(globalAnnouncementsInput, 'Announcements');
-      await setDoc(doc(db, 'meta', 'announcements'), { items });
-      showOk('Saved announcements.');
-    }catch(e){
-      showErr(e.message);
-    }
-  };
-
-  document.getElementById('saveApplyRulesBtn').onclick = async () => {
-    try{
-      const sections = parseJsonField(applyRulesInput, 'Apply Rules');
-      await setDoc(doc(db, 'meta', 'applyRules'), { sections });
-      showOk('Saved apply rules.');
+      loadRunApplyConfig(runId);
     }catch(e){
       showErr(e.message);
     }
@@ -426,26 +431,16 @@
     }
   };
 
-  document.getElementById('saveApplyBtn').onclick = async () => {
+  document.getElementById('resetRunApplyBtn').onclick = async () => {
     try{
-      const enabled = applyEnabledInput.value === 'true';
-      const maxSlots = parseInt(applyMaxInput.value, 10) || 0;
-      await setDoc(doc(db, 'meta', 'applications'), { enabled, maxSlots }, { merge: true });
-      showOk('Saved application settings.');
-      loadApplyConfig();
-    }catch(e){
-      showErr(e.message);
-    }
-  };
-
-  document.getElementById('resetApplyBtn').onclick = async () => {
-    try{
-      if(!confirm('Delete all applicants and reset the count to 0? This cannot be undone.')) return;
-      const snap = await getDocs(collection(db, 'applications'));
+      const runId = runSelect.value;
+      if(!runId) throw new Error('Select a saved run first.');
+      if(!confirm('Delete all applicants for this run and reset its count to 0? This cannot be undone.')) return;
+      const snap = await getDocs(query(collection(db, 'applications'), where('runId', '==', runId)));
       await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
-      await setDoc(doc(db, 'meta', 'applications'), { count: 0 }, { merge: true });
-      showOk('Applications reset.');
-      loadApplyConfig();
+      await setDoc(doc(db, 'runApplications', runId), { count: 0 }, { merge: true });
+      showOk('Applications reset for this run.');
+      loadRunApplyConfig(runId);
     }catch(e){
       showErr(e.message);
     }
@@ -459,6 +454,7 @@
       const runSnap = await getDoc(doc(db, 'runs', runId));
       if(!runSnap.exists()) throw new Error('Save the run first, then set it live.');
       await setDoc(doc(db, 'meta', 'current'), { activeRunId: runId });
+      await setDoc(doc(db, 'runs', runId), { ended: false }, { merge: true });
       showOk(`${runTypeLabel(runTypeInput.value)} (${runDate}) is now the live run.`);
       loadCurrentLive();
     }catch(e){
@@ -468,7 +464,15 @@
 
   document.getElementById('endLiveBtn').onclick = async () => {
     try{
+      const currentSnap = await getDoc(doc(db, 'meta', 'current'));
+      const endedRunId = currentSnap.exists() ? currentSnap.data().activeRunId : null;
       await setDoc(doc(db, 'meta', 'current'), { activeRunId: null });
+      // Flag the run itself as ended so it goes straight to the archive
+      // regardless of its date — a future-dated run just ended early
+      // would otherwise still look "upcoming" and stay in Progress.
+      if(endedRunId){
+        await setDoc(doc(db, 'runs', endedRunId), { ended: true }, { merge: true });
+      }
       showOk('Run ended and moved to the archive.');
       loadCurrentLive();
     }catch(e){
@@ -480,14 +484,19 @@
     try{
       const runId = runSelect.value;
       if(!runId) throw new Error('Select a saved run from the dropdown to delete it.');
-      if(!confirm(`Delete run ${runId}? This cannot be undone.`)) return;
+      if(!confirm(`Delete run ${runId}? This also deletes its application settings and applicants. This cannot be undone.`)) return;
       await deleteDoc(doc(db, 'runs', runId));
+      await deleteDoc(doc(db, 'runApplications', runId));
+      const appSnap = await getDocs(query(collection(db, 'applications'), where('runId', '==', runId)));
+      await Promise.all(appSnap.docs.map(d => deleteDoc(d.ref)));
       showOk(`Deleted run ${runId}.`);
       runSelect.value = '';
       runDateInput.value = '';
       runTypeInput.value = 'candle';
       timetableInput.value = '[]';
       reportInput.value = '[]';
+      runAnnouncementsInput.value = '[]';
+      loadRunApplyConfig(null);
       await loadRunList();
     }catch(e){
       showErr(e.message);

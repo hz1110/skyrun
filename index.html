@@ -79,11 +79,29 @@
   }
   section{ padding: 56px 0; border-top: 1px solid var(--line); }
   .section-head{ display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom: 32px; flex-wrap:wrap; }
-  #apply .section-head{ margin-bottom: 12px; }
   .section-head h2{ font-size: 30px; color: var(--cloud-white); }
-  .section-sub{ color: rgba(245,243,255,0.55); font-size:14px; margin-top:6px; }
 
-  .progress-shell{ display:grid; grid-template-columns: minmax(64px, max-content) 1fr; gap: 32px; align-items:stretch; }
+  /* Progress section: a grid so the carousel arrows can sit in a different
+     spot on desktop (below the title row) vs mobile (above the slots text)
+     without duplicating markup — see the media query below for the swap. */
+  .progress-layout{
+    display:grid; grid-template-columns: 1fr auto; column-gap:16px; row-gap:14px;
+    grid-template-areas:
+      "title slots"
+      "title button"
+      "nav nav"
+      "shell shell"
+      "ann ann";
+    margin-bottom: 32px;
+  }
+  .pg-title{ grid-area: title; font-size:30px; color: var(--cloud-white); align-self:center; }
+  #applySlotsHint{ grid-area: slots; justify-self:end; align-self:end; }
+  .pg-btn{ grid-area: button; justify-self:end; align-self:start; }
+  .progress-nav{ grid-area: nav; }
+  .pg-shell{ grid-area: shell; margin:0; }
+  .pg-ann{ grid-area: ann; margin:0; }
+
+  .progress-shell{ display:grid; grid-template-columns: minmax(64px, max-content) 1fr; gap: 32px; align-items:stretch; touch-action: pan-y; }
   .run-graphic{
     position:relative; height:100%; max-width:240px;
     display:flex; flex-direction:column; justify-content:center;
@@ -146,6 +164,20 @@
     60%{ transform:translateX(-50%) scaleY(0.94) rotate(2deg); opacity:1;}
   }
 
+  .progress-nav{ display:flex; align-items:center; justify-content:center; gap:16px; }
+  .progress-arrow{
+    cursor:pointer; border:1px solid var(--line); border-radius:999px; background: rgba(245,243,255,0.05);
+    color: var(--cloud-white); width:32px; height:32px; font-size:18px; line-height:1;
+    display:flex; align-items:center; justify-content:center; transition: background 0.2s ease, border-color 0.2s ease;
+  }
+  .progress-arrow:hover{ background: rgba(255,201,120,0.12); border-color: rgba(255,201,120,0.4); }
+  .progress-dots{ display:flex; align-items:center; gap:7px; }
+  .progress-dot{
+    cursor:pointer; border:none; padding:0; width:7px; height:7px; border-radius:50%;
+    background: rgba(245,243,255,0.25); transition: background 0.2s ease, transform 0.2s ease;
+  }
+  .progress-dot.active{ background: var(--candle-gold); transform: scale(1.3); }
+
   .timeline{ display:flex; flex-direction:column-reverse; gap:0; }
   .step{
     display:grid; grid-template-columns: 78px 20px 1fr; gap:14px;
@@ -192,7 +224,7 @@
   .recs a:hover{ color: var(--candle-ember); }
   .empty-note{ color: rgba(245,243,255,0.4); font-size:14px; }
 
-  .apply-slots{ color: var(--muted-teal); font-size:14px; margin-bottom:16px; }
+  .apply-slots{ color: var(--muted-teal); font-size:13px; }
   .apply-form{ display:flex; flex-direction:column; gap:16px; max-width:420px; }
   .apply-form label{ display:block; font-size:13px; color: rgba(245,243,255,0.6); margin-bottom:6px; }
   .apply-form input{
@@ -215,6 +247,13 @@
   .apply-msg.ok{ color: var(--early-green); }
   .apply-msg.err{ color: var(--soft-rose); }
   .apply-closed{ color: rgba(245,243,255,0.6); font-size:14.5px; }
+  .apply-open-btn{
+    cursor:pointer; border:1px solid rgba(255,201,120,0.4); border-radius:999px;
+    background: rgba(255,201,120,0.12); color: var(--candle-gold); font-weight:700;
+    font-family:'Nunito'; font-size:13px; padding:9px 18px; white-space:nowrap;
+    transition: background 0.2s ease;
+  }
+  .apply-open-btn:hover{ background: rgba(255,201,120,0.22); }
 
   .loading-screen{
     position:fixed; inset:0; z-index:100; background: var(--sky-deep);
@@ -274,6 +313,20 @@
     .progress-shell{ grid-template-columns: minmax(44px, max-content) 1fr; gap:18px; }
     .candle{ width:44px; }
     .step{ grid-template-columns: 60px 16px 1fr; }
+    #loadErrorMsg{ max-width:380px; white-space:normal; }
+    .apply-open-btn{ white-space:normal; text-align:center; }
+    /* Arrows move above the slots/button block on mobile instead of below the title row. */
+    .progress-layout{
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "title"
+        "nav"
+        "slots"
+        "button"
+        "shell"
+        "ann";
+    }
+    #applySlotsHint, .pg-btn{ justify-self:stretch; align-self:auto; text-align:center; }
   }
   @media (prefers-reduced-motion: reduce){
     .flame, .status-pill .dot, .star, .candle-fill::before{ animation:none !important; }
@@ -293,6 +346,12 @@
   <div class="loading-text">Loading...</div>
 </div>
 
+<div class="maintenance-screen" id="loadErrorScreen" style="display:none; z-index:150;">
+  <div class="loading-flame"></div>
+  <h2>⚠️ There's a problem with the connection status.</h2>
+  <p id="loadErrorMsg" style="max-width:none; white-space:nowrap;">Trouble loading the site right now. Please try again in a moment.</p>
+</div>
+
 <div class="bg-image"></div>
 <div class="bg-overlay"></div>
 <div class="stars" id="stars"></div>
@@ -302,46 +361,39 @@
     <div class="status-pill" id="statusPill"><span class="dot"></span><span id="statusText">Loading...</span></div>
   </div>
 
-  <!-- APPLY -->
-  <section id="apply" style="display:none;">
-    <div class="section-head">
-      <div>
-        <h2>Apply to Join</h2>
-        <div class="section-sub" id="applySub"></div>
-      </div>
-    </div>
-    <div id="applyBody"></div>
-  </section>
-
   <!-- LIVE PROGRESS -->
   <section id="progress">
-    <div class="section-head">
-      <div>
-        <h2>Progress</h2>
-        <div class="section-sub" id="liveSub">Waiting for the current run...</div>
+    <div class="progress-layout" id="progressLayout">
+      <h2 class="pg-title" id="liveSub">Waiting for the current run...</h2>
+      <div class="apply-slots" id="applySlotsHint" style="display:none;"></div>
+      <button type="button" class="apply-open-btn pg-btn" id="applyOpenBtn" style="display:none;">📝 Apply to Join</button>
+      <div class="progress-nav" id="progressNav" style="display:none;">
+        <button type="button" class="progress-arrow" id="progressPrev" aria-label="Previous run">‹</button>
+        <div class="progress-dots" id="progressDots"></div>
+        <button type="button" class="progress-arrow" id="progressNext" aria-label="Next run">›</button>
       </div>
-    </div>
-    <div class="progress-shell" id="progressShell">
-      <div class="run-graphic" id="runGraphic">
-        <div class="candle" id="graphicCandle">
-          <div class="flame" id="flame"></div>
-          <div class="candle-fill planned" id="candleFill" style="height:0%"></div>
-          <div class="candle-fill live" id="realtimeCandleFill" style="height:0%"></div>
+      <div class="progress-shell pg-shell" id="progressShell">
+        <div class="run-graphic" id="runGraphic">
+          <div class="candle" id="graphicCandle">
+            <div class="flame" id="flame"></div>
+            <div class="candle-fill planned" id="candleFill" style="height:0%"></div>
+            <div class="candle-fill live" id="realtimeCandleFill" style="height:0%"></div>
+          </div>
+          <div class="image-fill" id="graphicEden" style="display:none; aspect-ratio: 173 / 305;">
+            <img class="image-fill-bg" src="assets/eden-candle.png" alt="">
+            <img class="image-fill-fg" id="edenFillPlanned" src="assets/eden-candle.png" alt="" style="clip-path: inset(100% 50% 0 0);">
+            <img class="image-fill-fg live" id="edenFillLive" src="assets/eden-candle.png" alt="" style="clip-path: inset(100% 0 0 50%);">
+          </div>
+          <div class="image-fill" id="graphicWingLight" style="display:none; aspect-ratio: 435 / 1100;">
+            <img class="image-fill-bg" src="assets/wing-light.png" alt="">
+            <img class="image-fill-fg" id="wingLightFillPlanned" src="assets/wing-light.png" alt="" style="clip-path: inset(100% 50% 0 0);">
+            <img class="image-fill-fg live" id="wingLightFillLive" src="assets/wing-light.png" alt="" style="clip-path: inset(100% 0 0 50%);">
+          </div>
         </div>
-        <div class="image-fill" id="graphicEden" style="display:none; aspect-ratio: 173 / 305;">
-          <img class="image-fill-bg" src="assets/eden-candle.png" alt="">
-          <img class="image-fill-fg" id="edenFillPlanned" src="assets/eden-candle.png" alt="" style="clip-path: inset(100% 50% 0 0);">
-          <img class="image-fill-fg live" id="edenFillLive" src="assets/eden-candle.png" alt="" style="clip-path: inset(100% 0 0 50%);">
-        </div>
-        <div class="image-fill" id="graphicWingLight" style="display:none; aspect-ratio: 435 / 1100;">
-          <img class="image-fill-bg" src="assets/wing-light.png" alt="">
-          <img class="image-fill-fg" id="wingLightFillPlanned" src="assets/wing-light.png" alt="" style="clip-path: inset(100% 50% 0 0);">
-          <img class="image-fill-fg live" id="wingLightFillLive" src="assets/wing-light.png" alt="" style="clip-path: inset(100% 0 0 50%);">
-        </div>
+        <div class="timeline" id="timeline"></div>
       </div>
-      <div class="timeline" id="timeline"></div>
+      <div class="recs pg-ann" id="announcements" style="border-top:1px solid var(--line); padding-top:20px;"></div>
     </div>
-    <div class="recs" id="announcements" style="margin-top:28px; border-top:1px solid var(--line); padding-top:20px;"></div>
   </section>
 
   <!-- ARCHIVE -->
@@ -354,6 +406,13 @@
     <div id="archiveList"><div class="empty-note">Loading past runs...</div></div>
   </section>
 
+  </div>
+</div>
+
+<div class="modal-overlay" id="applyModal" style="display:none;">
+  <div class="modal-box">
+    <h3 id="applyModalTitle">Apply to Join</h3>
+    <div id="applyModalBody"></div>
   </div>
 </div>
 
@@ -412,18 +471,20 @@
 
   // ---------- Loading screen (hidden once the first round of data has arrived) ----------
   const loadingScreenEl = document.getElementById('loadingScreen');
-  const loadFlags = { current: false, announcements: false, applications: false, runs: false, liveRun: false };
+  const loadErrorScreenEl = document.getElementById('loadErrorScreen');
+  const loadFlags = { current: false, applications: false, runs: false, liveRun: false };
   let liveRunNeeded = false;
   let loadingHidden = false;
 
   function hideLoadingScreen(){
     if(loadingHidden) return;
     loadingHidden = true;
+    loadErrorScreenEl.style.display = 'none'; // in case it loaded successfully right after the failsafe fired
     loadingScreenEl.classList.add('hide');
     setTimeout(() => { loadingScreenEl.style.display = 'none'; }, 650);
   }
   function checkAllLoaded(){
-    const required = ['current', 'announcements', 'applications', 'runs'];
+    const required = ['current', 'applications', 'runs'];
     if(liveRunNeeded) required.push('liveRun');
     if(required.every(k => loadFlags[k])) hideLoadingScreen();
   }
@@ -432,7 +493,11 @@
     loadFlags[key] = true;
     checkAllLoaded();
   }
-  setTimeout(hideLoadingScreen, 8000); // failsafe in case something never resolves
+  // If loading never finishes (e.g. Firestore unreachable), block the site
+  // with an explicit error instead of silently revealing a half-loaded page.
+  setTimeout(() => {
+    if(!loadingHidden) loadErrorScreenEl.style.display = 'flex';
+  }, 8000);
 
   // ---------- Background stars ----------
   const starsEl = document.getElementById('stars');
@@ -446,10 +511,30 @@
   }
 
   // ---------- Timezone helpers ----------
-  // Times are authored in KST (UTC+9) and anchored to the run's own "date" field,
-  // then displayed in each visitor's own browser/device timezone automatically.
-  function kstToDate(dateStr, hhmm){
-    return new Date(`${dateStr}T${hhmm}:00+09:00`);
+  // Times are authored in the game's own timezone — US Pacific (PST/PDT) — and
+  // anchored to the run's own "date" field, then displayed in each visitor's
+  // own browser/device timezone automatically. Pacific alternates between
+  // PST (UTC-8) and PDT (UTC-7), so we ask the browser's real timezone
+  // database for the correct offset instead of hardcoding one.
+  const GAME_TZ = 'America/Los_Angeles';
+  function getTimeZoneOffsetMinutes(date, timeZone){
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }).formatToParts(date).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+    const asUTC = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+    return (asUTC - date.getTime()) / 60000;
+  }
+  function pstToDate(dateStr, hhmm){
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const [hh, mm] = hhmm.split(':').map(Number);
+    let utc = Date.UTC(y, m - 1, d, hh, mm, 0);
+    for(let i = 0; i < 2; i++){ // converges even right around a DST transition
+      const offsetMin = getTimeZoneOffsetMinutes(new Date(utc), GAME_TZ);
+      utc = Date.UTC(y, m - 1, d, hh, mm, 0) - offsetMin * 60000;
+    }
+    return new Date(utc);
   }
   function formatLocalTime(date){
     return date.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
@@ -463,16 +548,22 @@
     const span = h > 0 ? `${h}h${m ? ' '+m+'m' : ''}` : `${m}m`;
     return past ? `${span} ago` : `in ${span}`;
   }
-  function todayKST(){
-    const now = new Date();
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    return new Date(utc + 9 * 3600000).toISOString().slice(0, 10);
+  function todayPST(){
+    return new Intl.DateTimeFormat('en-CA', { timeZone: GAME_TZ }).format(new Date());
   }
-  // Replaces {{t:HH:MM}} tokens (KST, anchored to today's date) with a live relative countdown.
-  function renderTimeTokens(text){
-    const today = todayKST();
+  // Turns a "YYYY-MM-DD" game date into "July 15, 2026" for display everywhere.
+  function formatGameDate(dateStr){
+    if(!dateStr) return dateStr;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    if(!y || !m || !d) return dateStr;
+    return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+  // Replaces {{t:HH:MM}} tokens (Pacific) with a live relative countdown, anchored
+  // to the run's own date (falls back to today's game date if none given).
+  function renderTimeTokens(text, runDate){
+    const anchor = runDate || todayPST();
     return text.replace(/\{\{t:(\d{2}:\d{2})\}\}/g, (_, hhmm) => {
-      const t = kstToDate(today, hhmm);
+      const t = pstToDate(anchor, hhmm);
       return formatRelative(t);
     });
   }
@@ -500,6 +591,7 @@
   }
 
   // ---------- Render the live run ----------
+  const progressSectionEl = document.getElementById('progress');
   const timelineEl = document.getElementById('timeline');
   const progressShellEl = document.getElementById('progressShell');
   const candleFillEl = document.getElementById('candleFill');
@@ -508,6 +600,9 @@
   const liveSubEl = document.getElementById('liveSub');
   const statusPillEl = document.getElementById('statusPill');
   const statusTextEl = document.getElementById('statusText');
+  const applyOpenBtnEl = document.getElementById('applyOpenBtn');
+  const applySlotsHintEl = document.getElementById('applySlotsHint');
+  let runApplyConfigs = {};
 
   // ---------- Run graphic (candle / eden / wingLight, picked by the run's runType) ----------
   const runGraphicEl = document.getElementById('runGraphic');
@@ -565,31 +660,29 @@
   }
 
   let liveRunData = null;
-  let liveTimer = null;
+  let activeRunId = null;
+  let allRuns = [];
+  let carouselIndex = 0;
 
-  function renderLiveRun(){
-    if(!liveRunData){
-      progressShellEl.style.display = 'none';
-      timelineEl.innerHTML = '';
-      liveSubEl.textContent = 'No active run.';
-      statusTextEl.textContent = 'No Run is currently active.';
-      statusPillEl.className = 'status-pill none';
-      candleFillEl.style.height = '0%';
-      realtimeCandleFillEl.style.height = '0%';
-      realtimeCandleFillEl.className = 'candle-fill live';
-      setRunGraphic('candle', 0, 0, '');
-      return;
-    }
-    const { date, timetable = [], report = [], runType = 'candle' } = liveRunData;
-    liveSubEl.textContent = `The candle fills as the run moves forward.`;
+  function runTypeLabel(type){
+    if(type === 'eden') return 'Eden Run';
+    if(type === 'wingLight') return 'Wing Light Run';
+    return 'Candle Run';
+  }
 
+  // Renders the timeline + candle/graphic fill for a single run's data —
+  // used both for the live run and for planned runs being browsed in the carousel.
+  function renderRunProgress(data){
+    const { date, timetable = [], report = [], runType = 'candle', announcements = [] } = data;
+    announcementsEl.innerHTML = announcements.map(a => `<div>${renderTimeTokens(a, date)}</div>`).join('');
+    announcementsEl.style.display = announcements.length ? '' : 'none';
     const now = new Date();
     let currentIdx = -1;
-    if(timetable.length && now >= kstToDate(date, timetable[0].time)){
+    if(timetable.length && now >= pstToDate(date, timetable[0].time)){
       currentIdx = timetable.length - 1; // fallback: past the last step
       timetable.forEach((step, i) => {
-        const stepDate = kstToDate(date, step.time);
-        const nextDate = i < timetable.length-1 ? kstToDate(date, timetable[i+1].time) : new Date(stepDate.getTime()+15*60000);
+        const stepDate = pstToDate(date, step.time);
+        const nextDate = i < timetable.length-1 ? pstToDate(date, timetable[i+1].time) : new Date(stepDate.getTime()+15*60000);
         if(now >= stepDate && now < nextDate) currentIdx = i;
       });
     }
@@ -602,7 +695,7 @@
       if(i === currentIdx) cls += ' current';
       div.className = cls;
       div.innerHTML = `
-        <div class="time">${formatLocalTime(kstToDate(date, step.time))}</div>
+        <div class="time">${formatLocalTime(pstToDate(date, step.time))}</div>
         <div class="track"><div class="node"></div></div>
         <div class="label">${step.label}${runType === 'candle' ? `<span class="tag ${step.afk ? 'afk-ok':'afk-no'}">${step.afk ? '✅ AFK OK':'❌ No AFK'}</span>` : ''}</div>
       `;
@@ -621,63 +714,152 @@
     realtimeCandleFillEl.className = `candle-fill live ${reportCls}`.trim();
 
     setRunGraphic(runType, pct, reportPct, reportCls);
+  }
 
-    if(currentIdx === -1){
-      progressShellEl.style.display = 'none';
+  // Top status pill/text always reflects the actual live run (meta/current),
+  // regardless of which run the carousel below is currently showing.
+  function renderLiveStatus(){
+    if(!liveRunData){
       statusTextEl.textContent = 'No Run is currently active.';
       statusPillEl.className = 'status-pill none';
-    } else {
-      progressShellEl.style.display = '';
-      statusTextEl.textContent = reportStatusText(lastReport);
-      statusPillEl.className = `status-pill ${reportCls}`.trim();
+      return;
     }
+    const { date, timetable = [], report = [] } = liveRunData;
+    const now = new Date();
+    let currentIdx = -1;
+    if(timetable.length && now >= pstToDate(date, timetable[0].time)){
+      currentIdx = timetable.length - 1;
+      timetable.forEach((step, i) => {
+        const stepDate = pstToDate(date, step.time);
+        const nextDate = i < timetable.length-1 ? pstToDate(date, timetable[i+1].time) : new Date(stepDate.getTime()+15*60000);
+        if(now >= stepDate && now < nextDate) currentIdx = i;
+      });
+    }
+    if(currentIdx === -1){
+      statusTextEl.textContent = 'No Run is currently active.';
+      statusPillEl.className = 'status-pill none';
+      return;
+    }
+    const lastReport = report[report.length - 1];
+    const reportCls = delayClassFromReport(lastReport ? lastReport.delay : 'none');
+    statusTextEl.textContent = reportStatusText(lastReport);
+    statusPillEl.className = `status-pill ${reportCls}`.trim();
   }
 
-  // ---------- Global announcements (always shown, independent of any run) ----------
-  let globalAnnouncements = [];
-  function renderAnnouncements(){
-    announcementsEl.innerHTML = globalAnnouncements.map(a => `<div>${renderTimeTokens(a)}</div>`).join('');
+  // ---------- Progress carousel: live run + upcoming planned runs ----------
+  const progressNavEl = document.getElementById('progressNav');
+  const progressDotsEl = document.getElementById('progressDots');
+
+  // Live run first (if any), then every other run dated today or later, soonest first.
+  function getCarouselRuns(){
+    const today = todayPST();
+    const live = activeRunId ? allRuns.find(r => r.id === activeRunId) : null;
+    const upcoming = allRuns
+      .filter(r => r.id !== activeRunId && !r.data.ended && (r.data.date || '') >= today)
+      .sort((a, b) => (a.data.date || '').localeCompare(b.data.date || ''));
+    return live ? [live, ...upcoming] : upcoming;
   }
-  onSnapshot(doc(db, 'meta', 'announcements'), (snap) => {
-    globalAnnouncements = snap.exists() ? (snap.data().items || []) : [];
-    renderAnnouncements();
-    markLoadedOnce('announcements');
+
+  function renderProgressDots(count, active){
+    if(count <= 1){ progressDotsEl.innerHTML = ''; return; }
+    progressDotsEl.innerHTML = Array.from({ length: count }, (_, i) =>
+      `<button type="button" class="progress-dot ${i === active ? 'active' : ''}" data-i="${i}" aria-label="Go to run ${i+1}"></button>`
+    ).join('');
+  }
+
+  let currentCarouselRun = null;
+
+  function renderProgressCarousel(){
+    const runs = getCarouselRuns();
+    if(runs.length === 0){
+      currentCarouselRun = null;
+      progressSectionEl.style.display = 'none';
+      applyOpenBtnEl.style.display = 'none';
+      timelineEl.innerHTML = '';
+      announcementsEl.innerHTML = '';
+      candleFillEl.style.height = '0%';
+      realtimeCandleFillEl.style.height = '0%';
+      realtimeCandleFillEl.className = 'candle-fill live';
+      setRunGraphic('candle', 0, 0, '');
+      return;
+    }
+    progressSectionEl.style.display = '';
+    carouselIndex = ((carouselIndex % runs.length) + runs.length) % runs.length;
+    progressShellEl.style.display = '';
+    progressNavEl.style.display = runs.length > 1 ? 'flex' : 'none';
+
+    const { id, data } = runs[carouselIndex];
+    currentCarouselRun = { id, data };
+    renderRunProgress(data);
+    const applyCfg = runApplyConfigs[id];
+    const applyOpen = !!(applyCfg && applyCfg.enabled);
+    applyOpenBtnEl.style.display = applyOpen ? '' : 'none';
+    applyOpenBtnEl.textContent = `📝 Apply to Join for ${runTypeLabel(data.runType)} · ${formatGameDate(data.date || id)}`;
+    if(applyOpen){
+      const remaining = (Number(applyCfg.maxSlots) || 0) - (Number(applyCfg.count) || 0);
+      applySlotsHintEl.style.display = '';
+      applySlotsHintEl.textContent = remaining > 0 ? `${remaining} slot${remaining === 1 ? '' : 's'} left!` : 'Applications are closed for now.';
+    } else {
+      applySlotsHintEl.style.display = 'none';
+    }
+    liveSubEl.textContent = `${runTypeLabel(data.runType)} · ${formatGameDate(data.date || id)}`;
+    renderProgressDots(runs.length, carouselIndex);
+  }
+
+  function goToCarouselPage(i){
+    carouselIndex = i;
+    renderProgressCarousel();
+  }
+  document.getElementById('progressPrev').onclick = () => goToCarouselPage(carouselIndex - 1);
+  document.getElementById('progressNext').onclick = () => goToCarouselPage(carouselIndex + 1);
+  progressDotsEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-i]');
+    if(btn) goToCarouselPage(Number(btn.dataset.i));
   });
-  setInterval(renderAnnouncements, 30000);
 
+  // Swipe left/right to page through runs on mobile.
+  let touchStartX = null;
+  progressShellEl.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; }, { passive: true });
+  progressShellEl.addEventListener('touchend', (e) => {
+    if(touchStartX === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    touchStartX = null;
+    if(Math.abs(dx) < 40) return; // ignore taps/small movements
+    goToCarouselPage(carouselIndex + (dx < 0 ? 1 : -1));
+  });
+
+  // Both depend on the real-time clock (not just data changes), so recompute periodically.
+  setInterval(() => { renderLiveStatus(); renderProgressCarousel(); }, 30000);
+
+  let unsubscribeRun = null;
   function subscribeToRun(runId){
-    if(liveTimer) clearInterval(liveTimer);
-    if(!runId){ liveRunData = null; renderLiveRun(); markLoadedOnce('liveRun'); return; }
-    onSnapshot(doc(db, 'runs', runId), (snap) => {
+    if(unsubscribeRun){ unsubscribeRun(); unsubscribeRun = null; }
+    if(!runId){ liveRunData = null; renderLiveStatus(); markLoadedOnce('liveRun'); return; }
+    unsubscribeRun = onSnapshot(doc(db, 'runs', runId), (snap) => {
       liveRunData = snap.exists() ? snap.data() : null;
-      renderLiveRun();
+      renderLiveStatus();
+      renderProgressCarousel();
       markLoadedOnce('liveRun');
     });
-    liveTimer = setInterval(renderLiveRun, 30000); // recompute "current step" every 30s
   }
 
   // ---------- Watch meta/current for which run is live ----------
-  let activeRunId = null;
   onSnapshot(doc(db, 'meta', 'current'), (snap) => {
     activeRunId = snap.exists() ? snap.data().activeRunId : null;
     if(activeRunId) liveRunNeeded = true;
+    carouselIndex = 0; // jump back to the live run (or first upcoming) whenever it changes
     subscribeToRun(activeRunId);
     renderArchive(); // re-filter archive whenever the active run changes
+    renderProgressCarousel();
     markLoadedOnce('current');
   });
 
-  // ---------- Archive (all runs except the currently live one) ----------
+  // ---------- Archive (past runs only — today/future runs live in the Progress carousel) ----------
   const archiveListEl = document.getElementById('archiveList');
-  let allRuns = [];
-
-  function runTypeLabel(type){
-    if(type === 'eden') return 'Eden Run';
-    if(type === 'wingLight') return 'Wing Light Run';
-    return 'Candle Run';
-  }
 
   function renderArchive(){
-    const past = allRuns.filter(r => r.id !== activeRunId);
+    const today = todayPST();
+    const past = allRuns.filter(r => r.id !== activeRunId && (r.data.ended || (r.data.date || '') < today));
     if(past.length === 0){
       archiveListEl.innerHTML = '<div class="empty-note">No past runs recorded yet.</div>';
       return;
@@ -686,7 +868,7 @@
       const { id, data } = r;
       const rows = (data.report || []).map(row => `
         <div class="log-row">
-          <div class="t">${formatLocalTime(kstToDate(data.date || id, row.time))}</div>
+          <div class="t">${formatLocalTime(pstToDate(data.date || id, row.time))}</div>
           <div class="delay ${row.delay}">${row.delayLabel}</div>
           <div>${row.label}</div>
         </div>
@@ -695,7 +877,7 @@
         <details class="report">
           <summary>
             <div>
-              <h3>Report of ${runTypeLabel(data.runType)} at ${data.date || id}</h3>
+              <h3>Report of ${runTypeLabel(data.runType)} at ${formatGameDate(data.date || id)}</h3>
             </div>
           </summary>
           <div class="log">${rows || '<div class="empty-note">No report data for this run.</div>'}</div>
@@ -707,10 +889,11 @@
   onSnapshot(query(collection(db, 'runs'), orderBy('date', 'desc')), (snap) => {
     allRuns = snap.docs.map(d => ({ id: d.id, data: d.data() }));
     renderArchive();
+    renderProgressCarousel();
     markLoadedOnce('runs');
   });
 
-  // ---------- Apply rules popup content (editable from admin) ----------
+  // ---------- Apply rules popup content (editable per-run from admin) ----------
   const rulesContentEl = document.getElementById('rulesContent');
   const DEFAULT_APPLY_RULES = [
     {
@@ -731,10 +914,9 @@
       ],
     },
   ];
-  let applyRulesConfig = DEFAULT_APPLY_RULES;
 
-  function renderApplyRules(){
-    rulesContentEl.innerHTML = applyRulesConfig.map(section => `
+  function renderApplyRules(rules){
+    rulesContentEl.innerHTML = (rules || DEFAULT_APPLY_RULES).map(section => `
       <div class="rules-section">
         <h4>${section.title}</h4>
         <ul>${(section.items || []).map(item => `<li>${item}</li>`).join('')}</ul>
@@ -742,36 +924,33 @@
     `).join('');
   }
 
-  onSnapshot(doc(db, 'meta', 'applyRules'), (snap) => {
-    applyRulesConfig = snap.exists() && Array.isArray(snap.data().sections) ? snap.data().sections : DEFAULT_APPLY_RULES;
-    renderApplyRules();
-  });
+  // ---------- Apply to join (per run — button lives in the Progress header) ----------
+  const applyModalEl = document.getElementById('applyModal');
+  const applyModalTitleEl = document.getElementById('applyModalTitle');
+  const applyModalBodyEl = document.getElementById('applyModalBody');
 
-  // ---------- Apply to join ----------
-  const applySectionEl = document.getElementById('apply');
-  const applySubEl = document.getElementById('applySub');
-  const applyBodyEl = document.getElementById('applyBody');
-  let applyConfig = null;
-
-  function renderApply(){
-    if(!applyConfig || !applyConfig.enabled){
-      applySectionEl.style.display = 'none';
-      return;
-    }
-    applySectionEl.style.display = '';
-    const maxSlots = Number(applyConfig.maxSlots) || 0;
-    const count = Number(applyConfig.count) || 0;
+  function openApplyModal(){
+    if(!currentCarouselRun) return;
+    const { id, data } = currentCarouselRun;
+    applyModalTitleEl.textContent = `Apply to Join for ${runTypeLabel(data.runType)} · ${formatGameDate(data.date || id)}`;
+    const cfg = runApplyConfigs[id] || {};
+    const maxSlots = Number(cfg.maxSlots) || 0;
+    const count = Number(cfg.count) || 0;
     const remaining = maxSlots - count;
 
     if(remaining <= 0){
-      applySubEl.textContent = '';
-      applyBodyEl.innerHTML = `<div class="apply-closed">Applications are closed for now.<br>The roster isn't finalized until this section is removed! Please wait for applications to reopen!</div>`;
+      applyModalBodyEl.innerHTML = `
+        <div class="apply-closed">Applications are closed for now.<br>The roster isn't finalized until this button is removed! Please wait for applications to reopen!</div>
+        <div class="modal-actions">
+          <button type="button" class="apply-btn" id="applyModalCancelBtn" style="width:100%;">Close</button>
+        </div>
+      `;
+      document.getElementById('applyModalCancelBtn').onclick = () => { applyModalEl.style.display = 'none'; };
+      applyModalEl.style.display = 'flex';
       return;
     }
 
-    applySubEl.textContent = '';
-    applyBodyEl.innerHTML = `
-      <div class="apply-slots">${remaining} slot${remaining === 1 ? '' : 's'} left!</div>
+    applyModalBodyEl.innerHTML = `
       <form class="apply-form" id="applyForm">
         <div>
           <label for="discordInput">Discord Username</label>
@@ -789,7 +968,10 @@
             We're already friends!
           </label>
         </div>
-        <button type="submit" class="apply-btn" id="applySubmitBtn">Submit</button>
+        <div class="modal-actions">
+          <button type="button" class="btn-cancel" id="applyModalCancelBtn">Cancel</button>
+          <button type="submit" class="apply-btn" id="applySubmitBtn">Submit</button>
+        </div>
         <div class="apply-msg" id="applyMsg"></div>
       </form>
     `;
@@ -799,21 +981,26 @@
       friendCodeInput.disabled = e.target.checked;
       if(e.target.checked) friendCodeInput.value = '';
     });
+    document.getElementById('applyModalCancelBtn').onclick = () => { applyModalEl.style.display = 'none'; };
     document.getElementById('applyForm').addEventListener('submit', onApplyFormSubmit);
+    applyModalEl.style.display = 'flex';
   }
+  applyOpenBtnEl.onclick = openApplyModal;
 
   let pendingApplication = null;
   const rulesModalEl = document.getElementById('rulesModal');
 
   function onApplyFormSubmit(e){
     e.preventDefault();
+    if(!currentCarouselRun) return;
     const discord = document.getElementById('discordInput').value.trim();
     const nickname = document.getElementById('nicknameInput').value.trim();
     const friendCode = document.getElementById('friendCodeInput').value.trim();
     const alreadyFriends = document.getElementById('alreadyFriendsInput').checked;
     if(!discord || !nickname || (!friendCode && !alreadyFriends)) return;
 
-    pendingApplication = { discord, nickname, friendCode, alreadyFriends };
+    pendingApplication = { runId: currentCarouselRun.id, discord, nickname, friendCode, alreadyFriends };
+    renderApplyRules((runApplyConfigs[currentCarouselRun.id] || {}).rules);
     rulesModalEl.style.display = 'flex';
   }
 
@@ -835,8 +1022,9 @@
 
   document.getElementById('rulesAgreeBtn').onclick = async () => {
     if(!pendingApplication) return;
-    const { discord, nickname, friendCode, alreadyFriends } = pendingApplication;
+    const { runId, discord, nickname, friendCode, alreadyFriends } = pendingApplication;
     rulesModalEl.style.display = 'none';
+    applyModalEl.style.display = 'none';
     pendingApplication = null;
 
     showSubmitStatus(`
@@ -845,19 +1033,18 @@
     `);
 
     try{
-      const metaRef = doc(db, 'meta', 'applications');
+      const applyRef = doc(db, 'runApplications', runId);
       const appRef = doc(collection(db, 'applications'));
       await runTransaction(db, async (tx) => {
-        const metaSnap = await tx.get(metaRef);
-        const data = metaSnap.exists() ? metaSnap.data() : { enabled: false, maxSlots: 0, count: 0 };
+        const applySnap = await tx.get(applyRef);
+        const data = applySnap.exists() ? applySnap.data() : { enabled: false, maxSlots: 0, count: 0 };
         if(!data.enabled) throw new Error('Applications just closed.');
         const count = Number(data.count) || 0;
         const maxSlots = Number(data.maxSlots) || 0;
         if(count >= maxSlots) throw new Error('Applications just filled up.');
-        tx.set(appRef, { discord, nickname, friendCode, alreadyFriends, submittedAt: serverTimestamp() });
-        tx.set(metaRef, { ...data, count: count + 1 }, { merge: true });
+        tx.set(appRef, { runId, discord, nickname, friendCode, alreadyFriends, submittedAt: serverTimestamp() });
+        tx.set(applyRef, { ...data, count: count + 1 }, { merge: true });
       });
-      applyBodyEl.innerHTML = `<div class="apply-msg ok">✅ Application submitted!</div>`;
       showSubmitStatus(`
         <h3>🎉 You're in!</h3>
         <p class="apply-msg ok" style="margin:14px 0 20px;">Application submitted!</p>
@@ -873,9 +1060,10 @@
     }
   };
 
-  onSnapshot(doc(db, 'meta', 'applications'), (snap) => {
-    applyConfig = snap.exists() ? snap.data() : null;
-    renderApply();
+  onSnapshot(collection(db, 'runApplications'), (snap) => {
+    runApplyConfigs = {};
+    snap.forEach(d => { runApplyConfigs[d.id] = d.data(); });
+    renderProgressCarousel();
     markLoadedOnce('applications');
   });
 </script>
