@@ -22,7 +22,13 @@
   }
   ::selection{ background: var(--candle-gold); color: var(--sky-deep); }
   h1,h2{ font-family:'Cormorant Garamond', serif; margin:0; }
-  .wrap{ max-width: 760px; margin:0 auto; padding: 48px 24px 100px; }
+  .wrap{ max-width: 1200px; margin:0 auto; padding: 48px 24px 100px; }
+  .admin-grid{ display:flex; flex-direction:column; gap:24px; }
+  .admin-grid .card{ margin-bottom:0; }
+  .grid-side{ display:flex; flex-direction:column; gap:24px; }
+  @media (min-width: 900px){
+    .admin-grid{ display:grid; grid-template-columns: 2fr 1fr; align-items:start; }
+  }
   .mono{ font-family:'JetBrains Mono', monospace; }
 
   #loginBox{ max-width:360px; margin: 80px auto; text-align:center; }
@@ -85,6 +91,7 @@
       <button class="btn-primary" id="saveMaintenanceBtn">Save Maintenance Settings</button>
     </div>
 
+    <div class="admin-grid">
     <div class="card">
       <label>Load an existing run, or type a new date (YYYY-MM-DD) to create one</label>
       <select id="runSelect"><option value="">— New run —</option></select>
@@ -99,7 +106,6 @@
       </select>
 
       <label>Timetable (JSON array — planned schedule, shown in Live section)</label>
-      <div class="hint">"time" values are Pacific Time (PST/PDT, the game's own timezone), anchored to the run date above.</div>
       <textarea id="timetableInput">[
   { "time": "15:53", "label": "We all need to stay together!", "afk": true },
   { "time": "15:55", "label": "Fire Trial", "afk": false }
@@ -109,9 +115,10 @@
       <textarea id="reportInput">[
   { "time": "15:53", "label": "Fire Trial", "delay": "minus", "minutes": 2, "delayLabel": "-2 mins" }
 ]</textarea>
+      <div class="hint" id="autoReportHint" style="margin-top:-8px;">Select or save a run first.</div>
+      <button type="button" class="btn-secondary" id="logNowBtn" disabled>⏱ Log Now</button>
 
       <label>Announcements for this Run (JSON array of strings — shown while this run is live/upcoming; HTML like &lt;a&gt; is allowed)</label>
-      <div class="hint">Insert a live countdown with {{t:HH:MM}} (Pacific Time, anchored to this run's date) — e.g. "Fire Trial starts {{t:15:55}}" renders as "in 12m" that auto-updates.</div>
       <textarea id="runAnnouncementsInput">[
   "📌 Don't forget to claim your Daily Quest rewards!"
 ]</textarea>
@@ -126,7 +133,6 @@
       <div class="hint" id="runApplyCountHint">Current applicants: 0 / 0</div>
 
       <label>"Before you apply..." popup for this run (JSON array of sections)</label>
-      <div class="hint">Each section: { "title": "🤝 Rules", "items": ["line 1", "line 2"] }.</div>
       <textarea id="runApplyRulesInput" style="min-height:180px;">[
   {
     "title": "🤝 Rules",
@@ -154,14 +160,17 @@
       <button class="btn-danger" id="deleteBtn">Delete Run</button>
     </div>
 
-    <div class="card">
-      <div class="hint" style="margin-top:0;">Currently live run:</div>
-      <div id="currentLiveDisplay" class="mono" style="font-size:14px;">—</div>
-    </div>
+    <div class="grid-side">
+      <div class="card">
+        <div class="hint" style="margin-top:0;">Currently live run:</div>
+        <div id="currentLiveDisplay" class="mono" style="font-size:14px;">—</div>
+      </div>
 
-    <div class="card">
-      <div class="hint" style="margin-top:0;">Applicants (all runs)</div>
-      <div id="applicantList">Loading...</div>
+      <div class="card">
+        <div class="hint" style="margin-top:0;">Applicants (all runs)</div>
+        <div id="applicantList">Loading...</div>
+      </div>
+    </div>
     </div>
   </div>
 </div>
@@ -189,6 +198,31 @@
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
+
+  // ---------- Pacific Time helpers (mirrors index.html — the game's own timezone) ----------
+  const GAME_TZ = 'America/Los_Angeles';
+  function getTimeZoneOffsetMinutes(date, timeZone){
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }).formatToParts(date).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+    const asUTC = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+    return (asUTC - date.getTime()) / 60000;
+  }
+  function pstToDate(dateStr, hhmm){
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const [hh, mm] = hhmm.split(':').map(Number);
+    let utc = Date.UTC(y, m - 1, d, hh, mm, 0);
+    for(let i = 0; i < 2; i++){ // converges even right around a DST transition
+      const offsetMin = getTimeZoneOffsetMinutes(new Date(utc), GAME_TZ);
+      utc = Date.UTC(y, m - 1, d, hh, mm, 0) - offsetMin * 60000;
+    }
+    return new Date(utc);
+  }
+  function nowAsPstHHMM(){
+    return new Intl.DateTimeFormat('en-US', { timeZone: GAME_TZ, hourCycle: 'h23', hour: '2-digit', minute: '2-digit' }).format(new Date());
+  }
 
   const loginBox = document.getElementById('loginBox');
   const hidden = document.getElementById('hidden');
@@ -369,6 +403,7 @@
       reportInput.value = '[]';
       runAnnouncementsInput.value = '[]';
       loadRunApplyConfig(null);
+      updateAutoReportUI();
       return;
     }
     const snap = await getDoc(doc(db, 'runs', id));
@@ -381,6 +416,69 @@
       runAnnouncementsInput.value = JSON.stringify(data.announcements || [], null, 2);
     }
     loadRunApplyConfig(id);
+    updateAutoReportUI();
+  };
+
+  // ---------- "⏱ Log Now" — auto-fills the next unreported Timetable step's delay ----------
+  const autoReportHintEl = document.getElementById('autoReportHint');
+  const logNowBtnEl = document.getElementById('logNowBtn');
+
+  // The next step to report is always the one right after however many steps
+  // are already in Report — admins report in the same order they wrote Timetable.
+  function updateAutoReportUI(){
+    if(!runSelect.value){
+      autoReportHintEl.textContent = 'Select or save a run first.';
+      logNowBtnEl.disabled = true;
+      return;
+    }
+    let timetable, report;
+    try{ timetable = JSON.parse(timetableInput.value); }catch(e){ timetable = null; }
+    try{ report = JSON.parse(reportInput.value); }catch(e){ report = null; }
+    if(!Array.isArray(timetable) || timetable.length === 0){
+      autoReportHintEl.textContent = 'Add timetable steps first.';
+      logNowBtnEl.disabled = true;
+      return;
+    }
+    if(!Array.isArray(report)) report = [];
+    const next = timetable[report.length];
+    if(!next){
+      autoReportHintEl.textContent = 'All timetable steps are already reported.';
+      logNowBtnEl.disabled = true;
+      return;
+    }
+    autoReportHintEl.textContent = `Next: ${next.time} — ${next.label}`;
+    logNowBtnEl.disabled = false;
+  }
+  timetableInput.addEventListener('input', updateAutoReportUI);
+  reportInput.addEventListener('input', updateAutoReportUI);
+
+  logNowBtnEl.onclick = async () => {
+    try{
+      const runId = runSelect.value;
+      if(!runId) throw new Error('Select a saved run first.');
+      const runDate = runDateInput.value.trim();
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(runDate)) throw new Error('Run date must look like 2026-07-13.');
+      const timetable = parseJsonField(timetableInput, 'Timetable');
+      const report = parseJsonField(reportInput, 'Report');
+      const next = timetable[report.length];
+      if(!next) throw new Error('All timetable steps are already reported.');
+
+      const now = new Date();
+      const actualTime = nowAsPstHHMM();
+      const plannedDate = pstToDate(runDate, next.time);
+      const diffMin = Math.round((now - plannedDate) / 60000);
+      const delay = diffMin > 0 ? 'plus' : diffMin < 0 ? 'minus' : 'none';
+      const minutes = Math.abs(diffMin);
+      const delayLabel = diffMin === 0 ? 'On schedule' : `${diffMin > 0 ? '+' : ''}${diffMin} mins`;
+
+      const newReport = [...report, { time: actualTime, label: next.label, delay, minutes, delayLabel }];
+      await setDoc(doc(db, 'runs', runId), { report: newReport }, { merge: true });
+      reportInput.value = JSON.stringify(newReport, null, 2);
+      updateAutoReportUI();
+      showOk(`Logged "${next.label}" — ${delayLabel} (${actualTime}).`);
+    }catch(e){
+      showErr(e.message);
+    }
   };
 
   function parseJsonField(el, name){
@@ -415,6 +513,7 @@
       await loadRunList();
       runSelect.value = runId;
       loadRunApplyConfig(runId);
+      updateAutoReportUI();
     }catch(e){
       showErr(e.message);
     }
@@ -466,13 +565,12 @@
     try{
       const currentSnap = await getDoc(doc(db, 'meta', 'current'));
       const endedRunId = currentSnap.exists() ? currentSnap.data().activeRunId : null;
+      if(!endedRunId) throw new Error('No run is currently live — nothing to end. (Did you mean to click "Set as Live Run" first?)');
       await setDoc(doc(db, 'meta', 'current'), { activeRunId: null });
       // Flag the run itself as ended so it goes straight to the archive
       // regardless of its date — a future-dated run just ended early
       // would otherwise still look "upcoming" and stay in Progress.
-      if(endedRunId){
-        await setDoc(doc(db, 'runs', endedRunId), { ended: true }, { merge: true });
-      }
+      await setDoc(doc(db, 'runs', endedRunId), { ended: true }, { merge: true });
       showOk('Run ended and moved to the archive.');
       loadCurrentLive();
     }catch(e){
@@ -497,6 +595,7 @@
       reportInput.value = '[]';
       runAnnouncementsInput.value = '[]';
       loadRunApplyConfig(null);
+      updateAutoReportUI();
       await loadRunList();
     }catch(e){
       showErr(e.message);
