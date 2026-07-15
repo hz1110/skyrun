@@ -101,7 +101,7 @@
   .pg-shell{ grid-area: shell; margin:0; }
   .pg-ann{ grid-area: ann; margin:0; }
 
-  .progress-shell{ display:grid; grid-template-columns: minmax(64px, max-content) 1fr; gap: 32px; align-items:stretch; touch-action: pan-y; }
+  .progress-shell{ display:grid; grid-template-columns: minmax(64px, max-content) 1fr; gap: 32px; align-items:stretch; }
   .run-graphic{
     position:relative; height:100%; max-width:240px;
     display:flex; flex-direction:column; justify-content:center;
@@ -815,17 +815,6 @@
   progressDotsEl.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-i]');
     if(btn) goToCarouselPage(Number(btn.dataset.i));
-  });
-
-  // Swipe left/right to page through runs on mobile.
-  let touchStartX = null;
-  progressShellEl.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; }, { passive: true });
-  progressShellEl.addEventListener('touchend', (e) => {
-    if(touchStartX === null) return;
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    touchStartX = null;
-    if(Math.abs(dx) < 40) return; // ignore taps/small movements
-    goToCarouselPage(carouselIndex + (dx < 0 ? 1 : -1));
   });
 
   // Both depend on the real-time clock (not just data changes), so recompute periodically.
