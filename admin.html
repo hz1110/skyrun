@@ -463,10 +463,12 @@
       const next = timetable[report.length];
       if(!next) throw new Error('All timetable steps are already reported.');
 
-      const now = new Date();
       const actualTime = nowAsPstHHMM();
       const plannedDate = pstToDate(runDate, next.time);
-      const diffMin = Math.round((now - plannedDate) / 60000);
+      // Diff the two minute-precision timestamps (not raw "now", which still has
+      // seconds) so the delay always matches the displayed HH:MM exactly.
+      const actualDate = pstToDate(runDate, actualTime);
+      const diffMin = Math.round((actualDate - plannedDate) / 60000);
       const delay = diffMin > 0 ? 'plus' : diffMin < 0 ? 'minus' : 'none';
       const minutes = Math.abs(diffMin);
       const unit = minutes === 1 ? 'min' : 'mins';
