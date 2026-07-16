@@ -764,14 +764,17 @@
     return pstToDate(r.data.date || r.id, firstTime).getTime();
   }
 
-  // Live run first (if any), then every other run dated today or later, soonest first.
+  // The live run (if any) + every other run dated today or later, all sorted together
+  // by actual start time — the live run no longer jumps to the front just for being
+  // live, it takes its real chronological place among the others. It's still always
+  // included even if its date has technically passed, so a run that's still going
+  // past midnight PST doesn't vanish from the carousel while it's live.
   function getCarouselRuns(){
     const today = todayPST();
     const live = activeRunId ? allRuns.find(r => r.id === activeRunId) : null;
-    const upcoming = allRuns
-      .filter(r => r.id !== activeRunId && !r.data.ended && (r.data.date || '') >= today)
-      .sort((a, b) => runSortTime(a) - runSortTime(b));
-    return live ? [live, ...upcoming] : upcoming;
+    const upcoming = allRuns.filter(r => r.id !== activeRunId && !r.data.ended && (r.data.date || '') >= today);
+    const combined = live ? [live, ...upcoming] : upcoming;
+    return combined.sort((a, b) => runSortTime(a) - runSortTime(b));
   }
 
   function renderProgressDots(count, active){
