@@ -440,13 +440,13 @@
       return;
     }
     if(!Array.isArray(report)) report = [];
-    const next = timetable[report.length];
-    if(!next){
-      autoReportHintEl.textContent = 'All timetable steps are already reported.';
-      logNowBtnEl.disabled = true;
-      return;
-    }
-    autoReportHintEl.textContent = `Next: ${next.time} — ${next.label}`;
+    // Once every step has been reported, keep re-logging the last step (e.g. for a
+    // loop or a checkpoint that repeats) instead of just stopping.
+    const allReported = report.length >= timetable.length;
+    const next = timetable[allReported ? timetable.length - 1 : report.length];
+    autoReportHintEl.textContent = allReported
+      ? `All steps reported — Log Now will add another "${next.label}" entry.`
+      : `Next: ${next.time} — ${next.label}`;
     logNowBtnEl.disabled = false;
   }
   timetableInput.addEventListener('input', updateAutoReportUI);
@@ -460,8 +460,9 @@
       if(!/^\d{4}-\d{2}-\d{2}$/.test(runDate)) throw new Error('Run date must look like 2026-07-13.');
       const timetable = parseJsonField(timetableInput, 'Timetable');
       const report = parseJsonField(reportInput, 'Report');
-      const next = timetable[report.length];
-      if(!next) throw new Error('All timetable steps are already reported.');
+      if(!timetable.length) throw new Error('Add timetable steps first.');
+      // Once every step has been reported, keep re-logging the last step.
+      const next = timetable[report.length >= timetable.length ? timetable.length - 1 : report.length];
 
       const actualTime = nowAsPstHHMM();
       const plannedDate = pstToDate(runDate, next.time);
