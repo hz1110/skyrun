@@ -469,7 +469,8 @@
       const diffMin = Math.round((now - plannedDate) / 60000);
       const delay = diffMin > 0 ? 'plus' : diffMin < 0 ? 'minus' : 'none';
       const minutes = Math.abs(diffMin);
-      const delayLabel = diffMin === 0 ? 'On schedule' : `${diffMin > 0 ? '+' : ''}${diffMin} mins`;
+      const unit = minutes === 1 ? 'min' : 'mins';
+      const delayLabel = diffMin === 0 ? 'No Delay' : `${diffMin > 0 ? '+' : ''}${diffMin} ${unit}`;
 
       const newReport = [...report, { time: actualTime, label: next.label, delay, minutes, delayLabel }];
       await setDoc(doc(db, 'runs', runId), { report: newReport }, { merge: true });
