@@ -102,7 +102,7 @@
       <select id="runTypeInput">
         <option value="candle">Candle Run (wax candle)</option>
         <option value="eden">Eden Run (Eden candle)</option>
-        <option value="wingLight">Wing Light Run (Sky kid silhouette)</option>
+        <option value="wingLight">Winged Light Run (Sky kid silhouette)</option>
       </select>
 
       <label>Timetable (JSON array — planned schedule, shown in Live section)</label>
@@ -277,7 +277,7 @@
 
   function runTypeLabel(type){
     if(type === 'eden') return 'Eden Run';
-    if(type === 'wingLight') return 'Wing Light Run';
+    if(type === 'wingLight') return 'Winged Light Run';
     return 'Candle Run';
   }
   // Each run is stored under its own "date_type" document, so a Candle Run
